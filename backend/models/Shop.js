@@ -22,10 +22,11 @@ const shopSchema = new mongoose.Schema({
 
   // For barber/hardware/electrician etc
   services: [{
-    name: { type: String },
-    price: { type: Number },
-    duration: { type: Number, default: 30 }
-  }],
+  name: { type: String },
+  price: { type: Number },
+  duration: { type: Number, default: 30 },
+  image: { type: String, default: '' }
+}],
 
   // For food category only
   menuItems: [{
