@@ -128,4 +128,22 @@ const getAdminStats = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
-module.exports = { signup, login, getProfile, getAdminStats };
+// @route  PUT /api/auth/profile
+// @access Private
+const updateProfile = async (req, res) => {
+  try {
+    const { name, phone, profileImage, expoPushToken, notificationsEnabled } = req.body;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id,
+      { name, phone, profileImage, expoPushToken, notificationsEnabled },
+      { new: true }
+    ).select('-password');
+
+    res.status(200).json({ success: true, user: updatedUser });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+module.exports = { signup, login, getProfile, getAdminStats ,updateProfile};
