@@ -166,12 +166,55 @@ const getMyShop = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+// @route  GET /api/shops/admin/all
+// @access Private (admin only)
+const getAllShopsAdmin = async (req, res) => {
+  try {
+    const shops = await Shop.find()
+      .populate('ownerId', 'name email phone')
+      .sort({ createdAt: -1 });
+    res.status(200).json({ success: true, count: shops.length, shops });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
 
+// @route  PUT /api/shops/:id/approve
+// @access Private (admin only)
+const approveShop = async (req, res) => {
+  try {
+    const shop = await Shop.findByIdAndUpdate(
+      req.params.id,
+      { isApproved: true },
+      { new: true }
+    );
+    if (!shop) {
+      return res.status(404).json({ message: 'Shop not found' });
+    }
+    res.status(200).json({ success: true, message: 'Shop approved!', shop });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// @route  DELETE /api/shops/:id
+// @access Private (admin only)
+const deleteShop = async (req, res) => {
+  try {
+    await Shop.findByIdAndDelete(req.params.id);
+    res.status(200).json({ success: true, message: 'Shop deleted' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
 module.exports = {
   createShop,
   getAllShops,
   getShopById,
   updateShop,
   toggleShopStatus,
-  getMyShop
+  getMyShop,
+  getAllShopsAdmin,
+  approveShop,
+  deleteShop
 };

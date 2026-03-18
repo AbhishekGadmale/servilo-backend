@@ -100,5 +100,32 @@ const getProfile = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+// @route  GET /api/admin/stats
+// @access Private (admin only)
+const getAdminStats = async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const Shop = require('../models/Shop');
+    const Booking = require('../models/Booking');
 
-module.exports = { signup, login, getProfile };
+    const totalUsers = await User.countDocuments({ role: 'customer' });
+    const totalProviders = await User.countDocuments({ role: 'provider' });
+    const totalShops = await Shop.countDocuments();
+    const pendingShops = await Shop.countDocuments({ isApproved: false });
+    const totalBookings = await Booking.countDocuments();
+
+    res.status(200).json({
+      success: true,
+      stats: {
+        totalUsers,
+        totalProviders,
+        totalShops,
+        pendingShops,
+        totalBookings
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+module.exports = { signup, login, getProfile, getAdminStats };
