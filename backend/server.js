@@ -51,7 +51,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Handle preflight for all routes
+app.options('/{*path}', cors(corsOptions)); // Handle preflight for all routes
 
 // ─────────────────────────────────────────────────────────
 // 3. MORGAN — Request Logger

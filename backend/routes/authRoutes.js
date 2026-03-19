@@ -1,5 +1,5 @@
-const express    = require('express');
-const router     = express.Router();
+const express = require('express');
+const router  = express.Router();
 const { body, validationResult } = require('express-validator');
 const {
   signup, login, getProfile,
@@ -8,91 +8,91 @@ const {
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 const User = require('../models/User');
 
-// ── Validation middleware helper ────────────────────────
-const validate = (req, res, next) => {
+// ── Reusable validation error handler ──────────────────
+const handleValidation = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    const firstError = errors.array({ onlyFirstError: true })[0];
     return res.status(400).json({
       success: false,
-      message: errors.array()[0].msg, // return first error only
-      errors: errors.array()
+      message: firstError.msg
     });
   }
   next();
 };
 
-// ── Signup Validators ───────────────────────────────────
-const signupValidators = [
-  body('name')
-    .trim()
-    .notEmpty().withMessage('Name is required')
-    .isLength({ min: 2 }).withMessage('Name must be at least 2 characters')
-    .isLength({ max: 50 }).withMessage('Name must be under 50 characters'),
+// ── POST /api/auth/signup ───────────────────────────────
+router.post('/signup',
+  [
+    body('name')
+      .trim()
+      .not().isEmpty().withMessage('Name is required')
+      .isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
 
-  body('email')
-    .trim()
-    .notEmpty().withMessage('Email is required')
-    .isEmail().withMessage('Please enter a valid email address')
-    .normalizeEmail(),
+    body('email')
+      .trim()
+      .not().isEmpty().withMessage('Email is required')
+      .isEmail().withMessage('Please enter a valid email address'),
 
-  body('phone')
-    .trim()
-    .notEmpty().withMessage('Phone number is required')
-    .isLength({ min: 10, max: 15 }).withMessage('Phone must be 10-15 digits')
-    .matches(/^[0-9+\-\s]+$/).withMessage('Phone number is invalid'),
+    body('phone')
+      .trim()
+      .not().isEmpty().withMessage('Phone number is required')
+      .isLength({ min: 10 }).withMessage('Phone must be at least 10 digits'),
 
-  body('password')
-    .notEmpty().withMessage('Password is required')
-    .isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
-    .isLength({ max: 100 }).withMessage('Password is too long'),
+    body('password')
+      .not().isEmpty().withMessage('Password is required')
+      .isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  ],
+  handleValidation,
+  signup
+);
 
-  body('role')
-    .optional()
-    .isIn(['customer', 'provider', 'admin'])
-    .withMessage('Role must be customer, provider, or admin')
-];
+// ── POST /api/auth/login ────────────────────────────────
+router.post('/login',
+  [
+    body('email')
+      .trim()
+      .not().isEmpty().withMessage('Email is required')
+      .isEmail().withMessage('Please enter a valid email address'),
 
-// ── Login Validators ────────────────────────────────────
-const loginValidators = [
-  body('email')
-    .trim()
-    .notEmpty().withMessage('Email is required')
-    .isEmail().withMessage('Please enter a valid email address')
-    .normalizeEmail(),
+    body('password')
+      .not().isEmpty().withMessage('Password is required'),
+  ],
+  handleValidation,
+  login
+);
 
-  body('password')
-    .notEmpty().withMessage('Password is required')
-];
+// ── GET /api/auth/profile ───────────────────────────────
+router.get('/profile', protect, getProfile);
 
-// ── Profile Update Validators ───────────────────────────
-const profileUpdateValidators = [
-  body('name')
-    .optional()
-    .trim()
-    .isLength({ min: 2 }).withMessage('Name must be at least 2 characters')
-    .isLength({ max: 50 }).withMessage('Name is too long'),
+// ── PUT /api/auth/profile ───────────────────────────────
+router.put('/profile',
+  protect,
+  [
+    body('name')
+      .optional()
+      .trim()
+      .isLength({ min: 2 }).withMessage('Name must be at least 2 characters'),
 
-  body('phone')
-    .optional()
-    .trim()
-    .isLength({ min: 10, max: 15 }).withMessage('Phone must be 10-15 digits')
-    .matches(/^[0-9+\-\s]+$/).withMessage('Phone number is invalid')
-];
-
-// ── Public Routes ───────────────────────────────────────
-router.post('/signup', signupValidators, validate, signup);
-router.post('/login',  loginValidators,  validate, login);
-
-// ── Private Routes ──────────────────────────────────────
-router.get('/profile',  protect, getProfile);
-router.put('/profile',  protect, profileUpdateValidators, validate, updateProfile);
+    body('phone')
+      .optional()
+      .trim()
+      .isLength({ min: 10 }).withMessage('Phone must be at least 10 digits'),
+  ],
+  handleValidation,
+  updateProfile
+);
 
 // ── Admin Routes ────────────────────────────────────────
 router.get('/admin/stats',
-  protect, authorizeRoles('admin'), getAdminStats);
+  protect,
+  authorizeRoles('admin'),
+  getAdminStats
+);
 
 router.get('/admin/users',
-  protect, authorizeRoles('admin'),
+  protect,
+  authorizeRoles('admin'),
   async (req, res) => {
     try {
       const users = await User.find()
@@ -106,7 +106,8 @@ router.get('/admin/users',
 );
 
 router.delete('/admin/users/:id',
-  protect, authorizeRoles('admin'),
+  protect,
+  authorizeRoles('admin'),
   async (req, res) => {
     try {
       await User.findByIdAndDelete(req.params.id);
