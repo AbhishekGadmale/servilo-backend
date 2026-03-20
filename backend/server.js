@@ -185,7 +185,10 @@ app.use((err, req, res, next) => {
       : err.message
   });
 });
-
+// TEMPORARY — remove after Sentry test
+app.get('/api/test-sentry', (req, res) => {
+  throw new Error('Sentry backend test error!');
+});
 // ─────────────────────────────────────────────────────────
 // START
 // ─────────────────────────────────────────────────────────
