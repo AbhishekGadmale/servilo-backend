@@ -39,20 +39,34 @@ const createShop = async (req, res) => {
 
 // @route  GET /api/shops
 // @access Public
+// Default radius per service type (in meters)
+const SERVICE_RADIUS = {
+  barber:      5000,   // 5 km
+  food:        5000,   // 5 km
+  hardware:    10000,  // 10 km
+  electrician: 15000,  // 15 km
+  plumber:     15000,  // 15 km
+  mechanic:    20000,  // 20 km
+  default:     10000   // 10 km fallback
+};
+
+// @route  GET /api/shops
+// @access Public
 const getAllShops = async (req, res) => {
   try {
-    const { category, lat, lng, radius = 10000 } = req.query;
+    const { category, lat, lng, radius } = req.query;
 
     let query = { isApproved: true };
-
-    if (category) {
-      query.category = category;
-    }
+    if (category) query.category = category;
 
     let shops;
 
-    // If location provided, find nearby shops
     if (lat && lng) {
+      // Use custom radius if provided, else use service-type default
+      const dynamicRadius = radius
+        ? parseInt(radius)
+        : SERVICE_RADIUS[category] || SERVICE_RADIUS.default;
+
       shops = await Shop.find({
         ...query,
         location: {
@@ -61,19 +75,53 @@ const getAllShops = async (req, res) => {
               type: 'Point',
               coordinates: [parseFloat(lng), parseFloat(lat)]
             },
-            $maxDistance: parseInt(radius)
+            $maxDistance: dynamicRadius
           }
         }
       }).populate('ownerId', 'name phone');
+
+      // Attach distance in km to each shop
+      shops = shops.map(shop => {
+        const shopObj = shop.toObject();
+        const coords = shop.location?.coordinates;
+        if (coords) {
+          const distanceKm = getDistanceKm(
+            parseFloat(lat), parseFloat(lng),
+            coords[1], coords[0]
+          );
+          shopObj.distanceKm = Math.round(distanceKm * 10) / 10;
+        }
+        shopObj.searchRadiusKm = Math.round(dynamicRadius / 1000);
+        return shopObj;
+      });
+
     } else {
-      shops = await Shop.find(query).populate('ownerId', 'name phone');
+      shops = await Shop.find(query)
+        .populate('ownerId', 'name phone');
     }
 
-    res.status(200).json({ success: true, count: shops.length, shops });
+    res.status(200).json({
+      success: true,
+      count: shops.length,
+      shops
+    });
 
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
+};
+
+// Haversine formula — calculate distance between two coordinates
+const getDistanceKm = (lat1, lng1, lat2, lng2) => {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
 // @route  GET /api/shops/:id
