@@ -8,6 +8,25 @@ const connectDB    = require('./config/db');
 
 // ── Load env variables first ───────────────────────────
 dotenv.config();
+const Sentry = require('@sentry/node');
+
+// ── Initialize Sentry FIRST before everything else ────
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV || 'development',
+  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1.0,
+  enabled: !!process.env.SENTRY_DSN, // only runs if DSN is set
+
+  // Scrub sensitive fields from payloads
+  beforeSend(event) {
+    if (event.request?.data) {
+      const data = event.request.data;
+      if (data.password) data.password = '[REDACTED]';
+      if (data.token)    data.token    = '[REDACTED]';
+    }
+    return event;
+  }
+});
 connectDB();
 
 const app = express();
@@ -51,6 +70,9 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+// ── Sentry Request Handler (must be before routes) ────
+app.use(Sentry.Handlers.requestHandler());
+app.use(Sentry.Handlers.tracingHandler());
 app.options('/{*path}', cors(corsOptions)); // Handle preflight for all routes
 
 // ─────────────────────────────────────────────────────────
@@ -108,6 +130,19 @@ app.use('/api/bookings',            require('./routes/bookingRoutes'));
 app.use('/api/reviews',             require('./routes/reviewRoutes'));
 app.use('/api/upload',              require('./routes/uploadRoutes'));
 
+// ── Sentry Error Handler (must be before custom error handler) ──
+app.use(Sentry.Handlers.errorHandler({
+  shouldHandleError(error) {
+    // Report 4xx and all 5xx errors to Sentry
+    if (error.status >= 400) return true;
+    return true;
+  }
+}));
+
+// ── Your existing Global Error Handler ────────────────
+app.use((err, req, res, next) => {
+  // ... your existing error handler stays here
+});
 // ─────────────────────────────────────────────────────────
 // 8. HEALTH CHECK
 // ─────────────────────────────────────────────────────────
