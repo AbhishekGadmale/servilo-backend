@@ -134,9 +134,20 @@ const updateProfile = async (req, res) => {
   try {
     const { name, phone, profileImage, expoPushToken, notificationsEnabled } = req.body;
 
+    // Log to see if token is arriving
+    if (expoPushToken) {
+      console.log(`📱 Push token saved for user ${req.user.id}: ${expoPushToken.substring(0, 30)}...`);
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       req.user.id,
-      { name, phone, profileImage, expoPushToken, notificationsEnabled },
+      {
+        ...(name && { name }),
+        ...(phone && { phone }),
+        ...(profileImage !== undefined && { profileImage }),
+        ...(expoPushToken !== undefined && { expoPushToken }),
+        ...(notificationsEnabled !== undefined && { notificationsEnabled })
+      },
       { new: true }
     ).select('-password');
 
