@@ -28,10 +28,10 @@ const addReview = async (req, res) => {
     const allReviews = await Review.find({ shopId });
     const avgRating = allReviews.reduce((acc, r) => acc + r.rating, 0) / allReviews.length;
 
-    await Shop.findByIdAndUpdate(shopId, {
-      rating: avgRating.toFixed(1),
-      totalReviews: allReviews.length
-    });
+   await Shop.findByIdAndUpdate(shopId, {
+  rating: avgRating.toFixed(1),
+  totalReviews: allReviews.length
+}, { returnDocument: 'after' });
 
     res.status(201).json({ success: true, message: 'Review added!', review });
 

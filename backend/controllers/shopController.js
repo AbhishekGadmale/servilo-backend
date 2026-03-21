@@ -157,11 +157,11 @@ const updateShop = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
-    const updatedShop = await Shop.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+const updatedShop = await Shop.findByIdAndUpdate(
+  req.params.id,
+  req.body,
+  { returnDocument: 'after' }  // ← new syntax
+);
 
     res.status(200).json({ success: true, shop: updatedShop });
 
