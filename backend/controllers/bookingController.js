@@ -10,7 +10,7 @@ const sendPushNotification = async (token, title, body, data = {}) => {
     return;
   }
 
-  if (!token.startsWith('ExponentPushToken')) {
+  if (!token.startsWith('ExponentPushToken') && !token.startsWith('ExpoPushToken')) {
     console.log('⚠️ Invalid push token format:', token.substring(0, 20));
     return;
   }
