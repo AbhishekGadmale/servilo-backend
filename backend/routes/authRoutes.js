@@ -8,6 +8,10 @@ const {
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 const User = require('../models/User');
 
+// Import per-route rate limiters from the dedicated middleware module.
+// IMPORTANT: These are applied only to login & signup — NOT to admin/data routes.
+const { loginLimiter, signupLimiter } = require('../middleware/rateLimiters');
+
 // ── Reusable validation error handler ──────────────────
 const handleValidation = (req, res, next) => {
   const errors = validationResult(req);
@@ -22,7 +26,9 @@ const handleValidation = (req, res, next) => {
 };
 
 // ── POST /api/auth/signup ───────────────────────────────
+// signupLimiter: max 5 accounts per IP per hour
 router.post('/signup',
+  signupLimiter,
   [
     body('name')
       .trim()
@@ -48,7 +54,9 @@ router.post('/signup',
 );
 
 // ── POST /api/auth/login ────────────────────────────────
+// loginLimiter: max 10 failed attempts per IP per 15 min
 router.post('/login',
+  loginLimiter,
   [
     body('email')
       .trim()
@@ -63,6 +71,7 @@ router.post('/login',
 );
 
 // ── GET /api/auth/profile ───────────────────────────────
+// No rate limiter — authenticated route, safe to call freely
 router.get('/profile', protect, getProfile);
 
 // ── PUT /api/auth/profile ───────────────────────────────
@@ -83,7 +92,9 @@ router.put('/profile',
   updateProfile
 );
 
-// ── Admin Routes ────────────────────────────────────────
+// ── Admin Routes ─────────────────────────────────────────
+// These are admin-only, authenticated routes.
+// They carry NO auth-attempt rate limiter — only the global 300 req/15min limit.
 router.get('/admin/stats',
   protect,
   authorizeRoles('admin'),
@@ -100,7 +111,8 @@ router.get('/admin/users',
         .sort({ createdAt: -1 });
       res.status(200).json({ success: true, count: users.length, users });
     } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      console.error('Error fetching users:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch users' });
     }
   }
 );
@@ -111,9 +123,10 @@ router.delete('/admin/users/:id',
   async (req, res) => {
     try {
       await User.findByIdAndDelete(req.params.id);
-      res.status(200).json({ success: true, message: 'User deleted' });
+      res.status(200).json({ success: true, message: 'User deleted successfully' });
     } catch (error) {
-      res.status(500).json({ message: 'Server error' });
+      console.error('Error deleting user:', error);
+      res.status(500).json({ success: false, message: 'Failed to delete user' });
     }
   }
 );

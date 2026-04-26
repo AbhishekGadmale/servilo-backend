@@ -3,7 +3,6 @@ const dotenv       = require('dotenv');
 const cors         = require('cors');
 const helmet       = require('helmet');
 const morgan       = require('morgan');
-const rateLimit    = require('express-rate-limit');
 const connectDB    = require('./config/db');
 
 // ── Load env variables first ───────────────────────────
@@ -91,60 +90,36 @@ app.use(express.json({ limit: '10mb' }));  // limit payload size
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ─────────────────────────────────────────────────────────
-// 5. GLOBAL RATE LIMITER — All /api routes
+// 5. RATE LIMITERS
+//    - globalLimiter   → all /api routes (300 req / 15 min)
+//    - loginLimiter    → POST /api/auth/login only
+//    - signupLimiter   → POST /api/auth/signup only
+//
+//    Admin dashboard routes (GET /api/auth/admin/*, /api/shops/admin/*)
+//    are covered ONLY by globalLimiter — never blocked by auth-attempt limits.
 // ─────────────────────────────────────────────────────────
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,  // 15 minutes
-  max: 200,                   // 200 requests per IP per 15 min
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Too many requests from this IP. Please try again after 15 minutes.'
-  }
-});
-
+const { globalLimiter } = require('./middleware/rateLimiters');
 app.use('/api', globalLimiter);
 
 // ─────────────────────────────────────────────────────────
-// 6. AUTH RATE LIMITER — Stricter on /api/auth
+// 6. ROUTES
 // ─────────────────────────────────────────────────────────
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,  // 15 minutes
-  max: 10,                    // only 10 attempts per IP
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true, // only count failed/errored requests
-  message: {
-    success: false,
-    message: 'Too many login attempts from this IP. Please try again after 15 minutes.'
-  }
-});
-
-// ─────────────────────────────────────────────────────────
-// 7. ROUTES
-// ─────────────────────────────────────────────────────────
-app.use('/api/auth',     authLimiter, require('./routes/authRoutes'));
-app.use('/api/shops',               require('./routes/shopRoutes'));
-app.use('/api/bookings',            require('./routes/bookingRoutes'));
-app.use('/api/reviews',             require('./routes/reviewRoutes'));
-app.use('/api/upload',              require('./routes/uploadRoutes'));
+app.use('/api/auth',     require('./routes/authRoutes'));
+app.use('/api/shops',    require('./routes/shopRoutes'));
+app.use('/api/bookings', require('./routes/bookingRoutes'));
+app.use('/api/reviews',  require('./routes/reviewRoutes'));
+app.use('/api/upload',   require('./routes/uploadRoutes'));
 
 // ── Sentry Error Handler (must be before custom error handler) ──
 app.use(Sentry.Handlers.errorHandler({
   shouldHandleError(error) {
-    // Report 4xx and all 5xx errors to Sentry
     if (error.status >= 400) return true;
     return true;
   }
 }));
 
-// ── Your existing Global Error Handler ────────────────
-app.use((err, req, res, next) => {
-  // ... your existing error handler stays here
-});
 // ─────────────────────────────────────────────────────────
-// 8. HEALTH CHECK
+// 7. HEALTH CHECK
 // ─────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
   res.json({
@@ -155,8 +130,13 @@ app.get('/', (req, res) => {
   });
 });
 
+// TEMPORARY — remove after Sentry test
+app.get('/api/test-sentry', (req, res) => {
+  throw new Error('Sentry backend test error!');
+});
+
 // ─────────────────────────────────────────────────────────
-// 9. 404 HANDLER
+// 8. 404 HANDLER
 // ─────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({
@@ -166,7 +146,7 @@ app.use((req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────
-// 10. GLOBAL ERROR HANDLER
+// 9. GLOBAL ERROR HANDLER
 // ─────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   // CORS errors
@@ -185,10 +165,7 @@ app.use((err, req, res, next) => {
       : err.message
   });
 });
-// TEMPORARY — remove after Sentry test
-app.get('/api/test-sentry', (req, res) => {
-  throw new Error('Sentry backend test error!');
-});
+
 // ─────────────────────────────────────────────────────────
 // START
 // ─────────────────────────────────────────────────────────
@@ -197,6 +174,6 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔒 Helmet: enabled`);
-  console.log(`🛡️  Rate limiting: enabled`);
+  console.log(`🛡️  Rate limiting: global (300/15m) + login (10 fails/15m) + signup (5/hr)`);
   console.log(`📝 Morgan logging: enabled`);
 });

@@ -2,18 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { getAllUsersAPI, deleteUserAPI } from '../services/api';
 
 export default function UsersPage() {
-  const [users, setUsers] = useState([]);
+  const [users, setUsers]     = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [error, setError]     = useState('');
+  const [search, setSearch]   = useState('');
 
   useEffect(() => { fetchUsers(); }, []);
 
   const fetchUsers = async () => {
+    setError('');
     try {
       const res = await getAllUsersAPI();
       setUsers(res.data.users);
     } catch (err) {
-      console.log(err);
+      setError(err.message || 'Failed to load users. Please refresh.');
     } finally {
       setLoading(false);
     }
@@ -25,7 +27,7 @@ export default function UsersPage() {
       await deleteUserAPI(id);
       fetchUsers();
     } catch (err) {
-      alert('Failed to delete user');
+      alert(err.message || 'Failed to delete user');
     }
   };
 
@@ -39,6 +41,13 @@ export default function UsersPage() {
   return (
     <div style={styles.container}>
       <h2 style={styles.title}>👥 User Management</h2>
+
+      {error && (
+        <div style={styles.errorBanner}>
+          ⚠️ {error}
+          <button style={styles.retryBtn} onClick={fetchUsers}>Retry</button>
+        </div>
+      )}
 
       <input
         style={styles.search}
@@ -105,6 +114,17 @@ const styles = {
   container: { padding: '32px' },
   loading: { padding: '32px', fontSize: '18px', color: '#666' },
   title: { fontSize: '24px', color: '#1A1A2E', marginBottom: '24px' },
+  errorBanner: {
+    backgroundColor: '#FFEBEE', color: '#C62828',
+    padding: '12px 16px', borderRadius: '10px',
+    marginBottom: '20px', fontSize: '14px',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+  },
+  retryBtn: {
+    padding: '6px 14px', backgroundColor: '#C62828',
+    color: '#fff', border: 'none', borderRadius: '8px',
+    cursor: 'pointer', fontWeight: '600', fontSize: '13px'
+  },
   search: {
     width: '100%', padding: '12px 16px',
     borderRadius: '10px', border: '1px solid #E0E0E0',

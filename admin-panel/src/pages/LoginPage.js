@@ -22,7 +22,7 @@ export default function LoginPage({ onLogin }) {
       localStorage.setItem('adminUser', JSON.stringify(user));
       onLogin(user);
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
+      setError(err.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }

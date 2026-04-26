@@ -2,18 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { getAllShopsAdminAPI, approveShopAPI, deleteShopAPI } from '../services/api';
 
 export default function ShopsPage() {
-  const [shops, setShops] = useState([]);
+  const [shops, setShops]     = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('pending');
+  const [error, setError]     = useState('');
+  const [filter, setFilter]   = useState('pending');
 
   useEffect(() => { fetchShops(); }, []);
 
   const fetchShops = async () => {
+    setError('');
     try {
       const res = await getAllShopsAdminAPI();
       setShops(res.data.shops);
     } catch (err) {
-      console.log(err);
+      setError(err.message || 'Failed to load shops. Please refresh.');
     } finally {
       setLoading(false);
     }
@@ -26,7 +28,7 @@ export default function ShopsPage() {
       fetchShops();
       alert('✅ Shop approved successfully!');
     } catch (err) {
-      alert('Failed to approve shop');
+      alert(err.message || 'Failed to approve shop');
     }
   };
 
@@ -37,7 +39,7 @@ export default function ShopsPage() {
       fetchShops();
       alert('Shop deleted');
     } catch (err) {
-      alert('Failed to delete shop');
+      alert(err.message || 'Failed to delete shop');
     }
   };
 
@@ -50,6 +52,13 @@ export default function ShopsPage() {
   return (
     <div style={styles.container}>
       <h2 style={styles.title}>🏪 Shop Management</h2>
+
+      {error && (
+        <div style={styles.errorBanner}>
+          ⚠️ {error}
+          <button style={styles.retryBtn} onClick={fetchShops}>Retry</button>
+        </div>
+      )}
 
       {/* Filter Tabs */}
       <div style={styles.tabs}>
@@ -129,6 +138,17 @@ const styles = {
   container: { padding: '32px' },
   loading: { padding: '32px', fontSize: '18px', color: '#666' },
   title: { fontSize: '24px', color: '#1A1A2E', marginBottom: '24px' },
+  errorBanner: {
+    backgroundColor: '#FFEBEE', color: '#C62828',
+    padding: '12px 16px', borderRadius: '10px',
+    marginBottom: '20px', fontSize: '14px',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+  },
+  retryBtn: {
+    padding: '6px 14px', backgroundColor: '#C62828',
+    color: '#fff', border: 'none', borderRadius: '8px',
+    cursor: 'pointer', fontWeight: '600', fontSize: '13px'
+  },
   tabs: { display: 'flex', gap: '12px', marginBottom: '24px' },
   tab: {
     padding: '10px 20px', borderRadius: '10px',

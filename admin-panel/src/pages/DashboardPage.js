@@ -2,22 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { getStatsAPI } from '../services/api';
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState(null);
+  const [stats, setStats]     = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
 
-  useEffect(() => {
+  useEffect(() => { fetchStats(); }, []);
+
+  const fetchStats = () => {
+    setError('');
+    setLoading(true);
     getStatsAPI()
       .then(res => setStats(res.data.stats))
-      .catch(err => console.log(err))
+      .catch(err => setError(err.message || 'Failed to load stats. Please refresh.'))
       .finally(() => setLoading(false));
-  }, []);
+  };
 
   const cards = [
-    { label: 'Total Customers', value: stats?.totalUsers || 0, emoji: '👤', color: '#6C63FF' },
-    { label: 'Service Providers', value: stats?.totalProviders || 0, emoji: '🏪', color: '#2E7D32' },
-    { label: 'Total Shops', value: stats?.totalShops || 0, emoji: '🏬', color: '#1565C0' },
-    { label: 'Pending Approvals', value: stats?.pendingShops || 0, emoji: '⏳', color: '#E65100' },
-    { label: 'Total Bookings', value: stats?.totalBookings || 0, emoji: '📅', color: '#6A1B9A' },
+    { label: 'Total Customers',    value: stats?.totalUsers    || 0, emoji: '👤', color: '#6C63FF' },
+    { label: 'Service Providers',  value: stats?.totalProviders || 0, emoji: '🏪', color: '#2E7D32' },
+    { label: 'Total Shops',        value: stats?.totalShops    || 0, emoji: '🏬', color: '#1565C0' },
+    { label: 'Pending Approvals',  value: stats?.pendingShops  || 0, emoji: '⏳', color: '#E65100' },
+    { label: 'Total Bookings',     value: stats?.totalBookings || 0, emoji: '📅', color: '#6A1B9A' },
   ];
 
   if (loading) return <div style={styles.loading}>Loading stats...</div>;
@@ -26,6 +31,13 @@ export default function DashboardPage() {
     <div style={styles.container}>
       <h2 style={styles.title}>📊 Dashboard Overview</h2>
       <p style={styles.subtitle}>Welcome back, Admin! Here's what's happening on Servilo.</p>
+
+      {error && (
+        <div style={styles.errorBanner}>
+          ⚠️ {error}
+          <button style={styles.retryBtn} onClick={fetchStats}>Retry</button>
+        </div>
+      )}
 
       <div style={styles.grid}>
         {cards.map((card, i) => (
@@ -44,7 +56,18 @@ const styles = {
   container: { padding: '32px' },
   loading: { padding: '32px', fontSize: '18px', color: '#666' },
   title: { fontSize: '24px', color: '#1A1A2E', marginBottom: '8px' },
-  subtitle: { color: '#888', marginBottom: '32px' },
+  subtitle: { color: '#888', marginBottom: '24px' },
+  errorBanner: {
+    backgroundColor: '#FFEBEE', color: '#C62828',
+    padding: '12px 16px', borderRadius: '10px',
+    marginBottom: '24px', fontSize: '14px',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+  },
+  retryBtn: {
+    padding: '6px 14px', backgroundColor: '#C62828',
+    color: '#fff', border: 'none', borderRadius: '8px',
+    cursor: 'pointer', fontWeight: '600', fontSize: '13px'
+  },
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
