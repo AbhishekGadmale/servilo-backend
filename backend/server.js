@@ -69,10 +69,11 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-// ── Sentry Request Handler (must be before routes) ────
-app.use(Sentry.Handlers.requestHandler());
-app.use(Sentry.Handlers.tracingHandler());
 app.options('/{*path}', cors(corsOptions)); // Handle preflight for all routes
+
+// NOTE: @sentry/node v8+ instruments Express automatically via Sentry.init().
+// The old Sentry.Handlers.requestHandler() / tracingHandler() were removed in v8.
+// No manual middleware needed here.
 
 // ─────────────────────────────────────────────────────────
 // 3. MORGAN — Request Logger
@@ -110,13 +111,8 @@ app.use('/api/bookings', require('./routes/bookingRoutes'));
 app.use('/api/reviews',  require('./routes/reviewRoutes'));
 app.use('/api/upload',   require('./routes/uploadRoutes'));
 
-// ── Sentry Error Handler (must be before custom error handler) ──
-app.use(Sentry.Handlers.errorHandler({
-  shouldHandleError(error) {
-    if (error.status >= 400) return true;
-    return true;
-  }
-}));
+// NOTE: @sentry/node v8+ automatically captures unhandled errors — no
+// Sentry.Handlers.errorHandler() needed (that API was removed in v8).
 
 // ─────────────────────────────────────────────────────────
 // 7. HEALTH CHECK
