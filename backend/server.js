@@ -48,6 +48,7 @@ const ALLOWED_ORIGINS = [
   // Local development
   'http://localhost:3000',
   'http://localhost:5000',
+  'http://localhost:5173',
   'http://192.168.31.135:5000'   // your local IP for mobile testing
 ];
 

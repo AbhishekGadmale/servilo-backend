@@ -1,11 +1,11 @@
-# Graph Report - servilo  (2026-04-25)
+# Graph Report - servilo  (2026-04-26)
 
 ## Corpus Check
-- 80 files · ~103,996 words
+- 81 files · ~119,541 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 229 nodes · 230 edges · 10 communities detected
+- 229 nodes · 229 edges · 10 communities detected
 - Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 12 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -34,16 +34,16 @@
 10. `getTableHeader()` - 5 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `AppNavigator()` --calls--> `useAuth()`  [INFERRED]
-  mobile\src\navigation\AppNavigator.js → mobile\src\context\AuthContext.js
-- `LoginScreen()` --calls--> `useAuth()`  [INFERRED]
-  mobile\src\screens\auth\LoginScreen.js → mobile\src\context\AuthContext.js
-- `SignupScreen()` --calls--> `useAuth()`  [INFERRED]
-  mobile\src\screens\auth\SignupScreen.js → mobile\src\context\AuthContext.js
-- `ProfileScreen()` --calls--> `useAuth()`  [INFERRED]
-  mobile\src\screens\customer\ProfileScreen.js → mobile\src\context\AuthContext.js
-- `MyBookingsScreen()` --calls--> `useNetworkToast()`  [INFERRED]
-  mobile\src\screens\customer\MyBookingsScreen.js → mobile\src\hooks\useNetworkToast.js
+- `useAuth()` --calls--> `AppNavigator()`  [INFERRED]
+  mobile\src\context\AuthContext.js → mobile\src\navigation\AppNavigator.js
+- `useAuth()` --calls--> `LoginScreen()`  [INFERRED]
+  mobile\src\context\AuthContext.js → mobile\src\screens\auth\LoginScreen.js
+- `useAuth()` --calls--> `SignupScreen()`  [INFERRED]
+  mobile\src\context\AuthContext.js → mobile\src\screens\auth\SignupScreen.js
+- `useAuth()` --calls--> `ProfileScreen()`  [INFERRED]
+  mobile\src\context\AuthContext.js → mobile\src\screens\customer\ProfileScreen.js
+- `useNetworkToast()` --calls--> `MyBookingsScreen()`  [INFERRED]
+  mobile\src\hooks\useNetworkToast.js → mobile\src\screens\customer\MyBookingsScreen.js
 
 ## Communities
 

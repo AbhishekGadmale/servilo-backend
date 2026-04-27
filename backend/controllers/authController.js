@@ -25,13 +25,16 @@ const signup = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // Determine role (prevent 'admin' from being passed)
+    const assignedRole = (role === 'provider') ? 'provider' : 'customer';
+
     // Create user
     const user = await User.create({
       name,
       email,
       phone,
       password: hashedPassword,
-      role: role || 'customer'
+      role: assignedRole
     });
 
     // Return token
