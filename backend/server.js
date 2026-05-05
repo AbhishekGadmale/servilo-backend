@@ -130,7 +130,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Handle preflight for all routes
+app.options(/(.*)/, cors(corsOptions)); // Handle preflight for all routes
 
 // NOTE: @sentry/node v8+ instruments Express automatically via Sentry.init().
 // The old Sentry.Handlers.requestHandler() / tracingHandler() were removed in v8.
