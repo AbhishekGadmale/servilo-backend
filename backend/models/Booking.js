@@ -9,10 +9,13 @@ const bookingSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Shop', required: true
   },
+  staffId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Staff'
+  },
 
   serviceType: {
     type: String,
-    enum: ['barber', 'food', 'hardware', 'electrician', 'plumber', 'mechanic'],
     required: true
   },
 

@@ -8,7 +8,6 @@ const shopSchema = new mongoose.Schema({
   shopName: { type: String, required: true, trim: true },
   category: {
     type: String,
-    enum: ['barber', 'food', 'hardware', 'electrician', 'plumber', 'mechanic'],
     required: true
   },
   description: { type: String, default: '' },
@@ -43,6 +42,7 @@ const shopSchema = new mongoose.Schema({
   openTime: { type: String, default: '09:00' },
   closeTime: { type: String, default: '21:00' },
   currentQueue: { type: Number, default: 0 },
+  averageServiceTime: { type: Number, default: 30 }, // average minutes per customer
   createdAt: { type: Date, default: Date.now }
 });
 

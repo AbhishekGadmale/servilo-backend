@@ -1,12 +1,15 @@
 import React from 'react';
-import { FiGrid, FiShoppingBag, FiUsers, FiLogOut } from 'react-icons/fi';
+import { FiGrid, FiShoppingBag, FiUsers, FiLayers, FiStar, FiLogOut } from 'react-icons/fi';
 
 export default function Sidebar({ activePage, setActivePage, onLogout }) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <FiGrid /> },
-    { id: 'shops', label: 'Shop Approvals', icon: <FiShoppingBag /> },
-    { id: 'users', label: 'Users', icon: <FiUsers /> },
+    { id: 'shops',     label: 'Shops',     icon: <FiShoppingBag /> },
+    { id: 'users',     label: 'Users',     icon: <FiUsers /> },
+    { id: 'categories',label: 'Categories',icon: <FiLayers /> },
+    { id: 'reviews',   label: 'Reviews',    icon: <FiStar /> },
   ];
+
 
   return (
     <div style={styles.sidebar}>

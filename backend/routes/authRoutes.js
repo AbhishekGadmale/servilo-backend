@@ -3,10 +3,11 @@ const router  = express.Router();
 const { body, validationResult } = require('express-validator');
 const {
   signup, login, getProfile,
-  getAdminStats, updateProfile
+  getAdminStats, updateProfile,
+  getAllUsers, deleteUser,
+  toggleUserSuspension, getReferralStats
 } = require('../controllers/authController');
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
-const User = require('../models/User');
 
 // Import per-route rate limiters from the dedicated middleware module.
 // IMPORTANT: These are applied only to login & signup — NOT to admin/data routes.
@@ -74,6 +75,9 @@ router.post('/login',
 // No rate limiter — authenticated route, safe to call freely
 router.get('/profile', protect, getProfile);
 
+// ── GET /api/auth/referrals ────────────────────────────
+router.get('/referrals', protect, getReferralStats);
+
 // ── PUT /api/auth/profile ───────────────────────────────
 router.put('/profile',
   protect,
@@ -104,31 +108,19 @@ router.get('/admin/stats',
 router.get('/admin/users',
   protect,
   authorizeRoles('admin'),
-  async (req, res) => {
-    try {
-      const users = await User.find()
-        .select('-password')
-        .sort({ createdAt: -1 });
-      res.status(200).json({ success: true, count: users.length, users });
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      res.status(500).json({ success: false, message: 'Failed to fetch users' });
-    }
-  }
+  getAllUsers
 );
 
 router.delete('/admin/users/:id',
   protect,
   authorizeRoles('admin'),
-  async (req, res) => {
-    try {
-      await User.findByIdAndDelete(req.params.id);
-      res.status(200).json({ success: true, message: 'User deleted successfully' });
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      res.status(500).json({ success: false, message: 'Failed to delete user' });
-    }
-  }
+  deleteUser
+);
+
+router.put('/admin/users/:id/suspend',
+  protect,
+  authorizeRoles('admin'),
+  toggleUserSuspension
 );
 
 module.exports = router;

@@ -75,13 +75,14 @@ const updateItem = async (req, res) => {
     }
 
     // Update only provided fields
-    const existingItem = shop[itemKey][itemIndex];
-    const updatedItem = {
-      ...existingItem.toObject(),
-      ...buildItem(shop.category, req.body)
+    const existingItem = shop[itemKey][itemIndex].toObject();
+    const updateFields = buildItem(shop.category, req.body, true);
+
+    shop[itemKey][itemIndex] = {
+      ...existingItem,
+      ...updateFields
     };
 
-    shop[itemKey][itemIndex] = updatedItem;
     await shop.save();
 
     res.status(200).json({
@@ -119,22 +120,22 @@ const deleteItem = async (req, res) => {
 };
 
 // Helper: build item object based on category
-const buildItem = (category, data) => {
+const buildItem = (category, data, isUpdate = false) => {
+  const item = {};
+
+  if (data.name) item.name = data.name;
+  if (data.price !== undefined) item.price = parseFloat(data.price);
+  if (data.image !== undefined) item.image = data.image;
+
   if (category === 'food') {
-    return {
-      name: data.name,
-      price: parseFloat(data.price),
-      image: data.image || '',
-      inStock: data.inStock !== undefined ? data.inStock : true
-    };
+    if (data.inStock !== undefined) item.inStock = data.inStock;
+    else if (!isUpdate) item.inStock = true;
   } else {
-    return {
-      name: data.name,
-      price: parseFloat(data.price),
-      duration: parseInt(data.duration) || 30,
-      image: data.image || ''
-    };
+    if (data.duration !== undefined) item.duration = parseInt(data.duration);
+    else if (!isUpdate) item.duration = 30;
   }
+
+  return item;
 };
 
 module.exports = { getItems, addItem, updateItem, deleteItem };

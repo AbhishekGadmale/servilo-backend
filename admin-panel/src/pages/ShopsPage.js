@@ -6,6 +6,7 @@ export default function ShopsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [filter, setFilter]   = useState('pending');
+  const [search, setSearch]   = useState('');
 
   useEffect(() => { fetchShops(); }, []);
 
@@ -43,9 +44,13 @@ export default function ShopsPage() {
     }
   };
 
-  const filteredShops = shops.filter(shop =>
-    filter === 'pending' ? !shop.isApproved : shop.isApproved
-  );
+  const filteredShops = shops.filter(shop => {
+    const matchesFilter = filter === 'pending' ? !shop.isApproved : shop.isApproved;
+    const matchesSearch =
+      shop.shopName.toLowerCase().includes(search.toLowerCase()) ||
+      shop.ownerId?.name?.toLowerCase().includes(search.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
 
   if (loading) return <div style={styles.loading}>Loading shops...</div>;
 
@@ -59,6 +64,13 @@ export default function ShopsPage() {
           <button style={styles.retryBtn} onClick={fetchShops}>Retry</button>
         </div>
       )}
+
+      <input
+        style={styles.search}
+        placeholder="🔍 Search by shop name or owner..."
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+      />
 
       {/* Filter Tabs */}
       <div style={styles.tabs}>
@@ -148,6 +160,12 @@ const styles = {
     padding: '6px 14px', backgroundColor: '#C62828',
     color: '#fff', border: 'none', borderRadius: '8px',
     cursor: 'pointer', fontWeight: '600', fontSize: '13px'
+  },
+  search: {
+    width: '100%', padding: '12px 16px',
+    borderRadius: '10px', border: '1px solid #E0E0E0',
+    fontSize: '15px', marginBottom: '24px',
+    boxSizing: 'border-box', outline: 'none'
   },
   tabs: { display: 'flex', gap: '12px', marginBottom: '24px' },
   tab: {

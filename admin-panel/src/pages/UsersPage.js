@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAllUsersAPI, deleteUserAPI } from '../services/api';
+import { getAllUsersAPI, deleteUserAPI, toggleUserSuspensionAPI } from '../services/api';
 
 export default function UsersPage() {
   const [users, setUsers]     = useState([]);
@@ -28,6 +28,17 @@ export default function UsersPage() {
       fetchUsers();
     } catch (err) {
       alert(err.message || 'Failed to delete user');
+    }
+  };
+
+  const handleToggleSuspension = async (id, currentStatus) => {
+    const action = currentStatus ? 'unsuspend' : 'suspend';
+    if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
+    try {
+      await toggleUserSuspensionAPI(id);
+      fetchUsers();
+    } catch (err) {
+      alert(err.message || `Failed to ${action} user`);
     }
   };
 
@@ -93,12 +104,24 @@ export default function UsersPage() {
                 </td>
                 <td style={styles.td}>
                   {user.role !== 'admin' && (
-                    <button
-                      style={styles.deleteBtn}
-                      onClick={() => handleDelete(user._id)}
-                    >
-                      🗑️ Delete
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        style={{
+                          ...styles.suspendBtn,
+                          backgroundColor: user.isSuspended ? '#E8F5E9' : '#FFF3E0',
+                          color: user.isSuspended ? '#2E7D32' : '#E65100'
+                        }}
+                        onClick={() => handleToggleSuspension(user._id, user.isSuspended)}
+                      >
+                        {user.isSuspended ? '✅ Unsuspend' : '🚫 Suspend'}
+                      </button>
+                      <button
+                        style={styles.deleteBtn}
+                        onClick={() => handleDelete(user._id)}
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
                   )}
                 </td>
               </tr>
@@ -150,6 +173,10 @@ const styles = {
   roleBadge: {
     padding: '4px 10px', borderRadius: '20px',
     fontSize: '12px', fontWeight: '600'
+  },
+  suspendBtn: {
+    padding: '6px 14px', border: 'none', borderRadius: '8px',
+    cursor: 'pointer', fontWeight: '600', fontSize: '13px'
   },
   deleteBtn: {
     padding: '6px 14px', backgroundColor: '#FFEBEE',

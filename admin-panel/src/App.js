@@ -3,6 +3,8 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ShopsPage from './pages/ShopsPage';
 import UsersPage from './pages/UsersPage';
+import CategoriesPage from './pages/CategoriesPage';
+import ReviewsPage from './pages/ReviewsPage';
 import Sidebar from './components/Sidebar';
 
 export default function App() {
@@ -26,8 +28,11 @@ export default function App() {
     switch (activePage) {
       case 'dashboard': return <DashboardPage />;
       case 'shops': return <ShopsPage />;
-      case 'users': return <UsersPage />;
-      default: return <DashboardPage />;
+      case 'users':      return <UsersPage />;
+      case 'categories': return <CategoriesPage />;
+      case 'reviews':    return <ReviewsPage />;
+      default:           return <DashboardPage />;
+
     }
   };
 

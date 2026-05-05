@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = "https://servilo-backend.onrender.com/api";
+const BASE_URL = process.env.REACT_APP_API_URL || "https://servilo-backend.onrender.com/api";
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -50,10 +50,22 @@ export const loginAPI = (data) => api.post('/auth/login', data);
 export const getStatsAPI    = () => api.get('/auth/admin/stats');
 export const getAllUsersAPI  = () => api.get('/auth/admin/users');
 export const deleteUserAPI  = (id) => api.delete(`/auth/admin/users/${id}`);
+export const toggleUserSuspensionAPI = (id) => api.put(`/auth/admin/users/${id}/suspend`);
+
 
 // ── Admin: Shops ──────────────────────────────────────────
 export const getAllShopsAdminAPI = () => api.get('/shops/admin/all');
 export const approveShopAPI     = (id) => api.put(`/shops/${id}/approve`);
 export const deleteShopAPI      = (id) => api.delete(`/shops/${id}`);
+
+// ── CATEGORIES ──────────────────────────────────────────
+export const getCategoriesAPI    = () => api.get('/categories');
+export const createCategoryAPI   = (data) => api.post('/categories', data);
+export const updateCategoryAPI   = (id, data) => api.put(`/categories/${id}`, data);
+export const deleteCategoryAPI   = (id) => api.delete(`/categories/${id}`);
+
+// ── Admin: Moderation ─────────────────────────────────────
+export const getAllReviewsAdminAPI = () => api.get('/reviews/admin/all');
+export const deleteReviewAPI      = (id) => api.delete(`/reviews/${id}`);
 
 export default api;

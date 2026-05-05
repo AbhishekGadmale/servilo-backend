@@ -1,11 +1,11 @@
-# Graph Report - servilo  (2026-04-26)
+# Graph Report - servilo  (2026-04-29)
 
 ## Corpus Check
-- 81 files · ~119,541 words
+- 81 files · ~119,928 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 229 nodes · 229 edges · 10 communities detected
+- 230 nodes · 230 edges · 10 communities detected
 - Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 12 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -97,7 +97,7 @@ Nodes (4): goToNext(), goToPrevious(), makeCurrent(), toggleClass()
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `useAuth()` connect `Community 0` to `Community 8`?**
-  _High betweenness centrality (0.038) - this node is a cross-community bridge._
+  _High betweenness centrality (0.039) - this node is a cross-community bridge._
 - **Why does `updateProfileAPI()` connect `Community 8` to `Community 1`?**
   _High betweenness centrality (0.034) - this node is a cross-community bridge._
 - **Are the 6 inferred relationships involving `useAuth()` (e.g. with `AppNavigator()` and `LoginScreen()`) actually correct?**

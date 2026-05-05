@@ -29,13 +29,7 @@ Sentry.init({
 connectDB();
 
 const app = express();
-
-// ─────────────────────────────────────────────────────────
-// 1. HELMET — Secure HTTP Headers
-// ─────────────────────────────────────────────────────────
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' } // allow images from Cloudinary
-}));
+const server = require('http').createServer(app);
 
 // ─────────────────────────────────────────────────────────
 // 2. CORS — Allowed Origins Only
@@ -51,6 +45,72 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://192.168.31.135:5000'   // your local IP for mobile testing
 ];
+
+const io = require('socket.io')(server, {
+  cors: {
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, curl)
+      if (!origin) return callback(null, true);
+      if (ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+const Message = require('./models/Message');
+const User = require('./models/User');
+
+// Socket.io Logic
+// ... (rest of socket logic)
+io.on('connection', (socket) => {
+  console.log('⚡ User connected:', socket.id);
+
+  socket.on('join_room', (bookingId) => {
+    socket.join(bookingId);
+    console.log(`👤 User ${socket.id} joined room: ${bookingId}`);
+  });
+
+  socket.on('send_message', async (data) => {
+    const { bookingId, shopId, senderId, receiverId, message, image } = data;
+
+    try {
+      // If it's an inquiry, bookingId will be a string like 'inquiry_shopId_userId'
+      // We don't save that string as a MongoDB ObjectId.
+      const isObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
+
+      const newMessage = await Message.create({
+        bookingId: isObjectId(bookingId) ? bookingId : undefined,
+        shopId,
+        senderId,
+        receiverId,
+        message,
+        image: image || ''
+      });
+
+      const populatedMessage = await newMessage.populate('senderId', 'name profileImage');
+      
+      io.to(bookingId).emit('receive_message', populatedMessage);
+      console.log(`📩 Message sent in room ${bookingId}`);
+    } catch (error) {
+      console.error('❌ Socket message error:', error.message);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('👋 User disconnected');
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// 1. HELMET — Secure HTTP Headers
+// ─────────────────────────────────────────────────────────
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' } // allow images from Cloudinary
+}));
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -70,7 +130,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('/{*path}', cors(corsOptions)); // Handle preflight for all routes
+app.options('*', cors(corsOptions)); // Handle preflight for all routes
 
 // NOTE: @sentry/node v8+ instruments Express automatically via Sentry.init().
 // The old Sentry.Handlers.requestHandler() / tracingHandler() were removed in v8.
@@ -111,9 +171,12 @@ app.use('/api/shops',    require('./routes/shopRoutes'));
 app.use('/api/bookings', require('./routes/bookingRoutes'));
 app.use('/api/reviews',  require('./routes/reviewRoutes'));
 app.use('/api/upload',   require('./routes/uploadRoutes'));
+app.use('/api/chat',     require('./routes/chatRoutes'));
+app.use('/api/categories', require('./routes/categoryRoutes'));
+app.use('/api/staff',      require('./routes/staffRoutes'));
 
-// NOTE: @sentry/node v8+ automatically captures unhandled errors — no
-// Sentry.Handlers.errorHandler() needed (that API was removed in v8).
+// Sentry error handler (must be after all controllers but before any custom error middleware)
+Sentry.setupExpressErrorHandler(app);
 
 // ─────────────────────────────────────────────────────────
 // 7. HEALTH CHECK
@@ -167,7 +230,7 @@ app.use((err, req, res, next) => {
 // START
 // ─────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔒 Helmet: enabled`);

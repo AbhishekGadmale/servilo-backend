@@ -54,10 +54,15 @@ const SERVICE_RADIUS = {
 // @access Public
 const getAllShops = async (req, res) => {
   try {
-    const { category, lat, lng, radius } = req.query;
+    const { category, lat, lng, radius, search } = req.query;
 
     let query = { isApproved: true };
     if (category) query.category = category;
+    
+    // Add search logic
+    if (search) {
+      query.shopName = { $regex: search, $options: 'i' };
+    }
 
     let shops;
 
@@ -157,11 +162,35 @@ const updateShop = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
-const updatedShop = await Shop.findByIdAndUpdate(
-  req.params.id,
-  req.body,
-  { returnDocument: 'after' }  // ← new syntax
-);
+    const {
+      shopName, category, description,
+      address, phone, services,
+      openTime, closeTime, coordinates
+    } = req.body;
+
+    const updateData = {
+      shopName,
+      category,
+      description,
+      address,
+      phone,
+      services,
+      openTime,
+      closeTime
+    };
+
+    if (coordinates) {
+      updateData.location = {
+        type: 'Point',
+        coordinates: coordinates
+      };
+    }
+
+    const updatedShop = await Shop.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      { returnDocument: 'after', runValidators: true }
+    );
 
     res.status(200).json({ success: true, shop: updatedShop });
 
@@ -227,6 +256,8 @@ const getAllShopsAdmin = async (req, res) => {
   }
 };
 
+const { notifyProvider } = require('../utils/notifications');
+
 // @route  PUT /api/shops/:id/approve
 // @access Private (admin only)
 const approveShop = async (req, res) => {
@@ -239,6 +270,14 @@ const approveShop = async (req, res) => {
     if (!shop) {
       return res.status(404).json({ message: 'Shop not found' });
     }
+
+    // Notify provider
+    await notifyProvider(
+      shop.ownerId,
+      '🎉 Shop Approved!',
+      `Congratulations! Your shop "${shop.shopName}" has been approved and is now live.`
+    );
+
     res.status(200).json({ success: true, message: 'Shop approved!', shop });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });

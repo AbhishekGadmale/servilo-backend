@@ -15,12 +15,16 @@
 
 const rateLimit = require('express-rate-limit');
 
+// Helper to skip rate limiting in test environment
+const isTest = process.env.NODE_ENV === 'test';
+
 // ── Global limiter ───────────────────────────────────────
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,  // 15 minutes
   max: 300,                   // 300 requests per IP per window
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => isTest,
   message: {
     success: false,
     message: 'Too many requests. Please try again in 15 minutes.'
@@ -36,6 +40,7 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
+  skip: () => isTest,
   handler: (req, res) => {
     const resetMs  = req.rateLimit.resetTime instanceof Date
       ? req.rateLimit.resetTime.getTime()
@@ -57,6 +62,7 @@ const signupLimiter = rateLimit({
   max: 5,                     // 5 accounts per IP per hour
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => isTest,
   handler: (req, res) => {
     const resetMs  = req.rateLimit.resetTime instanceof Date
       ? req.rateLimit.resetTime.getTime()
