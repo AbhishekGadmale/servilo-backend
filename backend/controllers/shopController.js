@@ -62,6 +62,19 @@ const SERVICE_RADIUS = {
   default:     10000   // 10 km fallback
 };
 
+// Haversine formula — calculate distance between two coordinates
+const getDistanceKm = (lat1, lng1, lat2, lng2) => {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 // @route  GET /api/shops
 // @access Public
 const getAllShops = async (req, res) => {
@@ -158,19 +171,6 @@ const getAllShops = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
-};
-
-// Haversine formula — calculate distance between two coordinates
-const getDistanceKm = (lat1, lng1, lat2, lng2) => {
-  const R = 6371; // Earth radius in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) *
-    Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng / 2) * Math.sin(dLng / 2);
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
 // @route  GET /api/shops/:id
