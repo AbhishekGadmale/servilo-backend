@@ -118,16 +118,15 @@ const getAllShops = async (req, res) => {
       .skip(skip)
       .limit(limit);
 
-      // Get total count for pagination (requires separate count for $near)
+      // Get total count for pagination (using $geoWithin because $near is not supported in countDocuments)
       total = await Shop.countDocuments({
         ...query,
         location: {
-          $near: {
-            $geometry: {
-              type: 'Point',
-              coordinates: [parseFloat(lng), parseFloat(lat)]
-            },
-            $maxDistance: dynamicRadius
+          $geoWithin: {
+            $centerSphere: [
+              [parseFloat(lng), parseFloat(lat)],
+              dynamicRadius / 6371000 // Convert meters to radians (6371km radius)
+            ]
           }
         }
       });
