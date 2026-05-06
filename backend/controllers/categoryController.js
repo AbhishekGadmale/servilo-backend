@@ -17,21 +17,30 @@ const getCategories = async (req, res) => {
 const createCategory = async (req, res) => {
   try {
     const { name, icon, description } = req.body;
+    console.log('Step 1: Received request to create category:', { name, icon });
 
     if (!name) {
+      console.log('Step 2: Validation failed - name missing');
       return res.status(400).json({ message: 'Category name is required' });
     }
 
+    console.log('Step 3: Checking for existing category...');
     const existing = await Category.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
     if (existing) {
+      console.log('Step 4: Category already exists:', existing.name);
       return res.status(400).json({ message: 'Category already exists' });
     }
 
+    console.log('Step 5: Generating slug...');
     const slug = name.trim().toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
+    
+    console.log('Step 6: Attempting to create category in DB...');
     const category = await Category.create({ name: name.trim(), slug, icon, description });
+    
+    console.log('Step 7: Category created successfully:', category._id);
     res.status(201).json({ success: true, category });
   } catch (error) {
-    console.error('Error in createCategory:', error);
+    console.error('CRITICAL Error in createCategory:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
