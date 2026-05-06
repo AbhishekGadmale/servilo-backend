@@ -173,7 +173,7 @@ const styles = {
     border: '2px solid #E0E0E0', backgroundColor: '#fff',
     cursor: 'pointer', fontSize: '14px', fontWeight: '600'
   },
-  tabActive: { borderColor: '#6C63FF', backgroundColor: '#6C63FF', color: '#fff' },
+  tabActive: { border: '2px solid #6C63FF', backgroundColor: '#6C63FF', color: '#fff' },
   empty: {
     textAlign: 'center', padding: '48px',
     fontSize: '18px', color: '#888',

@@ -7,6 +7,7 @@ const getCategories = async (req, res) => {
     const categories = await Category.find({ isActive: true }).sort({ name: 1 });
     res.status(200).json({ success: true, count: categories.length, categories });
   } catch (error) {
+    console.error('Error in getCategories:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -17,14 +18,20 @@ const createCategory = async (req, res) => {
   try {
     const { name, icon, description } = req.body;
 
-    const existing = await Category.findOne({ name });
+    if (!name) {
+      return res.status(400).json({ message: 'Category name is required' });
+    }
+
+    const existing = await Category.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
     if (existing) {
       return res.status(400).json({ message: 'Category already exists' });
     }
 
-    const category = await Category.create({ name, icon, description });
+    const slug = name.trim().toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
+    const category = await Category.create({ name: name.trim(), slug, icon, description });
     res.status(201).json({ success: true, category });
   } catch (error) {
+    console.error('Error in createCategory:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -34,9 +41,25 @@ const createCategory = async (req, res) => {
 const updateCategory = async (req, res) => {
   try {
     const { name, icon, description, isActive } = req.body;
+    const updateData = { icon, description, isActive };
+    
+    if (name) {
+      updateData.name = name.trim();
+      updateData.slug = name.trim().toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
+      
+      // Check if name is taken by another category
+      const existing = await Category.findOne({ 
+        name: { $regex: new RegExp(`^${name}$`, 'i') },
+        _id: { $ne: req.params.id }
+      });
+      if (existing) {
+        return res.status(400).json({ message: 'Category name already taken' });
+      }
+    }
+
     const category = await Category.findByIdAndUpdate(
       req.params.id,
-      { name, icon, description, isActive },
+      { $set: updateData },
       { new: true, runValidators: true }
     );
 
@@ -46,6 +69,7 @@ const updateCategory = async (req, res) => {
 
     res.status(200).json({ success: true, category });
   } catch (error) {
+    console.error('Error in updateCategory:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -59,14 +83,10 @@ const deleteCategory = async (req, res) => {
       return res.status(404).json({ message: 'Category not found' });
     }
 
-    // Optional: Check if any shops are using this category before deleting
-    // const Shop = require('../models/Shop');
-    // const shopCount = await Shop.countDocuments({ category: category.name });
-    // if (shopCount > 0) return res.status(400).json({ message: 'Cannot delete category in use by shops' });
-
     await category.deleteOne();
     res.status(200).json({ success: true, message: 'Category removed' });
   } catch (error) {
+    console.error('Error in deleteCategory:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };

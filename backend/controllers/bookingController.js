@@ -42,11 +42,27 @@ const createBooking = async (req, res) => {
     if (!shop.isOpen) return res.status(400).json({ message: 'Shop is currently closed' });
 
     // ── Check Operating Hours ────────────────────────────
-    const now = new Date();
-    const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-    if (currentTimeStr < shop.openTime || currentTimeStr > shop.closeTime) {
+    const currentTimeStr = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(new Date());
+
+    const { openTime, closeTime } = shop;
+    let isClosed = false;
+
+    if (openTime <= closeTime) {
+      // Normal hours: e.g. 09:00 - 21:00
+      isClosed = (currentTimeStr < openTime || currentTimeStr > closeTime);
+    } else {
+      // Overnight hours: e.g. 18:00 - 02:00
+      isClosed = (currentTimeStr < openTime && currentTimeStr > closeTime);
+    }
+
+    if (isClosed) {
       return res.status(400).json({
-        message: `Shop is closed. Operating hours: ${shop.openTime} - ${shop.closeTime}`
+        message: `Shop is closed. Operating hours: ${openTime} - ${closeTime}`
       });
     }
 
