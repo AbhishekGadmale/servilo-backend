@@ -6,6 +6,10 @@ const messageSchema = new mongoose.Schema({
     ref: 'Booking',
     required: false // Optional for pre-booking inquiries
   },
+  isInquiry: {
+    type: Boolean,
+    default: false
+  },
   shopId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Shop',

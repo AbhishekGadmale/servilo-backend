@@ -7,8 +7,19 @@ const createShop = async (req, res) => {
     const {
       shopName, category, description,
       address, phone, services,
-      openTime, closeTime, coordinates
+      openTime, closeTime, coordinates,
+      weeklySchedule
     } = req.body;
+
+    // Default schedule if not provided
+    const defaultSchedule = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+    ].map(day => ({
+      day,
+      isOpen: true,
+      openTime: openTime || '09:00',
+      closeTime: closeTime || '21:00'
+    }));
 
     const shop = await Shop.create({
       ownerId: req.user.id,
@@ -20,6 +31,7 @@ const createShop = async (req, res) => {
       services,
       openTime,
       closeTime,
+      weeklySchedule: weeklySchedule || defaultSchedule,
       location: {
         type: 'Point',
         coordinates: coordinates || [0, 0]
@@ -55,16 +67,20 @@ const SERVICE_RADIUS = {
 const getAllShops = async (req, res) => {
   try {
     const { category, lat, lng, radius, search } = req.query;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 12;
+    const skip = (page - 1) * limit;
 
     let query = { isApproved: true };
     if (category) query.category = category;
     
-    // Add search logic
+    // Use text search if available, otherwise fallback to regex
     if (search) {
-      query.shopName = { $regex: search, $options: 'i' };
+      query.$text = { $search: search };
     }
 
     let shops;
+    let total;
 
     if (lat && lng) {
       // Use custom radius if provided, else use service-type default
@@ -72,6 +88,7 @@ const getAllShops = async (req, res) => {
         ? parseInt(radius)
         : SERVICE_RADIUS[category] || SERVICE_RADIUS.default;
 
+      // Note: $near logic with limit/skip
       shops = await Shop.find({
         ...query,
         location: {
@@ -83,7 +100,24 @@ const getAllShops = async (req, res) => {
             $maxDistance: dynamicRadius
           }
         }
-      }).populate('ownerId', 'name phone');
+      })
+      .populate('ownerId', 'name phone')
+      .skip(skip)
+      .limit(limit);
+
+      // Get total count for pagination (requires separate count for $near)
+      total = await Shop.countDocuments({
+        ...query,
+        location: {
+          $near: {
+            $geometry: {
+              type: 'Point',
+              coordinates: [parseFloat(lng), parseFloat(lat)]
+            },
+            $maxDistance: dynamicRadius
+          }
+        }
+      });
 
       // Attach distance in km to each shop
       shops = shops.map(shop => {
@@ -101,13 +135,23 @@ const getAllShops = async (req, res) => {
       });
 
     } else {
+      total = await Shop.countDocuments(query);
       shops = await Shop.find(query)
-        .populate('ownerId', 'name phone');
+        .populate('ownerId', 'name phone')
+        .sort({ rating: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit);
     }
 
     res.status(200).json({
       success: true,
       count: shops.length,
+      pagination: {
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        totalShops: total
+      },
       shops
     });
 
@@ -165,7 +209,8 @@ const updateShop = async (req, res) => {
     const {
       shopName, category, description,
       address, phone, services,
-      openTime, closeTime, coordinates
+      openTime, closeTime, coordinates,
+      weeklySchedule
     } = req.body;
 
     const updateData = {
@@ -176,7 +221,8 @@ const updateShop = async (req, res) => {
       phone,
       services,
       openTime,
-      closeTime
+      closeTime,
+      weeklySchedule
     };
 
     if (coordinates) {

@@ -41,15 +41,36 @@ const createBooking = async (req, res) => {
     if (!shop) return res.status(404).json({ message: 'Shop not found' });
     if (!shop.isOpen) return res.status(400).json({ message: 'Shop is currently closed' });
 
-    // ── Check Operating Hours ────────────────────────────
+    const now = new Date();
+    const dayName = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      weekday: 'long'
+    }).format(now);
+
     const currentTimeStr = new Intl.DateTimeFormat('en-GB', {
       timeZone: 'Asia/Kolkata',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false
-    }).format(new Date());
+    }).format(now);
 
-    const { openTime, closeTime } = shop;
+    // Find schedule for today
+    const todaySchedule = shop.weeklySchedule?.find(s => s.day === dayName);
+    
+    let openTime = shop.openTime;
+    let closeTime = shop.closeTime;
+    let isDayClosed = false;
+
+    if (todaySchedule) {
+      if (!todaySchedule.isOpen) isDayClosed = true;
+      openTime = todaySchedule.openTime;
+      closeTime = todaySchedule.closeTime;
+    }
+
+    if (isDayClosed) {
+      return res.status(400).json({ message: `Shop is closed today (${dayName})` });
+    }
+
     let isClosed = false;
 
     if (openTime <= closeTime) {
@@ -62,7 +83,7 @@ const createBooking = async (req, res) => {
 
     if (isClosed) {
       return res.status(400).json({
-        message: `Shop is closed. Operating hours: ${openTime} - ${closeTime}`
+        message: `Shop is closed. Operating hours today: ${openTime} - ${closeTime}`
       });
     }
 

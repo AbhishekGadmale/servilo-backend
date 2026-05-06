@@ -90,6 +90,12 @@ const bookingSchema = new mongoose.Schema({
     default: 'pending'
   },
 
+  providerLocation: {
+    latitude: { type: Number },
+    longitude: { type: Number },
+    updatedAt: { type: Date }
+  },
+
   providerNote: { type: String, default: '' },
   bookingDate: { type: Date, default: Date.now }
 });

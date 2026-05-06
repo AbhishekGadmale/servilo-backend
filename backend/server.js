@@ -78,12 +78,12 @@ io.on('connection', (socket) => {
     const { bookingId, shopId, senderId, receiverId, message, image } = data;
 
     try {
-      // If it's an inquiry, bookingId will be a string like 'inquiry_shopId_userId'
-      // We don't save that string as a MongoDB ObjectId.
       const isObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
+      const isBookingIdValid = isObjectId(bookingId);
 
       const newMessage = await Message.create({
-        bookingId: isObjectId(bookingId) ? bookingId : undefined,
+        bookingId: isBookingIdValid ? bookingId : undefined,
+        isInquiry: !isBookingIdValid,
         shopId,
         senderId,
         receiverId,
@@ -93,10 +93,31 @@ io.on('connection', (socket) => {
 
       const populatedMessage = await newMessage.populate('senderId', 'name profileImage');
       
+      // Always emit to the room name provided by the client (ObjectId or inquiry string)
       io.to(bookingId).emit('receive_message', populatedMessage);
       console.log(`📩 Message sent in room ${bookingId}`);
     } catch (error) {
       console.error('❌ Socket message error:', error.message);
+    }
+  });
+
+  socket.on('update_location', async (data) => {
+    const { bookingId, latitude, longitude } = data;
+    try {
+      // Broadcast to room (customer)
+      io.to(bookingId).emit('location_updated', { latitude, longitude });
+
+      // Save to DB (throttled/optional)
+      const Booking = require('./models/Booking');
+      await Booking.findByIdAndUpdate(bookingId, {
+        providerLocation: {
+          latitude,
+          longitude,
+          updatedAt: new Date()
+        }
+      });
+    } catch (error) {
+      console.error('❌ Socket location error:', error.message);
     }
   });
 

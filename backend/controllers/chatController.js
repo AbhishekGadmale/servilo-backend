@@ -78,6 +78,7 @@ const uploadChatImage = async (req, res) => {
 const markMessagesAsRead = async (req, res) => {
   try {
     const { bookingId } = req.params;
+    // bookingId can be an ObjectId or an inquiry string
     await Message.updateMany(
       { bookingId, receiverId: req.user.id, isRead: false },
       { $set: { isRead: true } }

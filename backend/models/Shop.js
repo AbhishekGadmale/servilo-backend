@@ -41,10 +41,20 @@ const shopSchema = new mongoose.Schema({
   isApproved: { type: Boolean, default: false },
   openTime: { type: String, default: '09:00' },
   closeTime: { type: String, default: '21:00' },
+  weeklySchedule: [{
+    day: { type: String, enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] },
+    isOpen: { type: Boolean, default: true },
+    openTime: { type: String, default: '09:00' },
+    closeTime: { type: String, default: '21:00' }
+  }],
   currentQueue: { type: Number, default: 0 },
   averageServiceTime: { type: Number, default: 30 }, // average minutes per customer
   createdAt: { type: Date, default: Date.now }
 });
 
 shopSchema.index({ location: '2dsphere' });
+shopSchema.index({ category: 1 });
+shopSchema.index({ isApproved: 1 });
+shopSchema.index({ shopName: 'text', description: 'text' });
+
 module.exports = mongoose.model('Shop', shopSchema);
