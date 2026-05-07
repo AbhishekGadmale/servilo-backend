@@ -89,4 +89,59 @@ const markMessagesAsRead = async (req, res) => {
   }
 };
 
-module.exports = { getChatHistory, uploadChatImage, markMessagesAsRead };
+// @route   GET /api/chat/list
+// @access  Private
+const getChatList = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const isProvider = req.user.role === 'provider';
+
+    // Find all messages involving the user
+    const messages = await Message.find({
+      $or: [{ senderId: userId }, { receiverId: userId }]
+    })
+    .sort({ createdAt: -1 })
+    .populate('shopId', 'shopName ownerId')
+    .populate('senderId', 'name profileImage')
+    .populate('receiverId', 'name profileImage');
+
+    // Group by unique conversation (Shop + optional Booking)
+    const chatGroups = {};
+
+    for (const msg of messages) {
+      // Key for grouping: shopId + bookingId (if exists) + other userId
+      const otherUserId = msg.senderId._id.toString() === userId 
+        ? msg.receiverId._id.toString() 
+        : msg.senderId._id.toString();
+      
+      const key = `${msg.shopId?._id || 'none'}_${msg.bookingId || 'inquiry'}_${otherUserId}`;
+
+      if (!chatGroups[key]) {
+        chatGroups[key] = {
+          shopId: msg.shopId?._id,
+          shopName: msg.shopId?.shopName,
+          bookingId: msg.bookingId,
+          lastMessage: msg,
+          unreadCount: 0,
+          customer: isProvider ? (msg.senderId._id.toString() === userId ? msg.receiverId : msg.senderId) : null,
+          shopOwner: !isProvider ? (msg.senderId._id.toString() === userId ? msg.receiverId : msg.senderId) : null
+        };
+      }
+
+      if (!msg.isRead && msg.receiverId._id.toString() === userId) {
+        chatGroups[key].unreadCount++;
+      }
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      chats: Object.values(chatGroups).sort((a, b) => 
+        b.lastMessage.createdAt - a.lastMessage.createdAt
+      ) 
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+module.exports = { getChatHistory, uploadChatImage, markMessagesAsRead, getChatList };

@@ -27,7 +27,7 @@ router.post('/book',
     body('shopId').isMongoId().withMessage('Invalid shop ID'),
     body('serviceType').isIn(['barber', 'food', 'hardware', 'electrician', 'plumber', 'mechanic'])
       .withMessage('Invalid service type'),
-    body('bookingType').isIn(['queue', 'order', 'request'])
+    body('bookingType').isIn(['queue', 'order', 'request', 'service_request', 'food_order', 'slot'])
       .withMessage('Invalid booking type'),
   ],
   handleValidation,
