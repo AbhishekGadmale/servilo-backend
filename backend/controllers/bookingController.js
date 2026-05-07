@@ -279,6 +279,16 @@ const cancelBooking = async (req, res) => {
     booking.status = 'cancelled';
     await booking.save();
 
+    // Notify provider about customer cancellation
+    const shop = await Shop.findById(booking.shopId);
+    if (shop) {
+      await notifyProvider(
+        shop.ownerId,
+        '❌ Booking Cancelled',
+        `A customer has cancelled their booking for ${booking.serviceType}.`
+      );
+    }
+
     // Update queue for barber
     if (booking.serviceType === 'barber') {
       const shop = await Shop.findById(booking.shopId);

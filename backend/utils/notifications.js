@@ -27,22 +27,50 @@ const sendPushNotification = async (token, title, body, data = {}) => {
       badge: 1
     };
 
+    // Include Project ID if available (often required for EAS)
+    if (process.env.EXPO_PROJECT_ID) {
+      message.projectId = process.env.EXPO_PROJECT_ID;
+    }
+
+    const headers = {
+      'Accept': 'application/json',
+      'Accept-Encoding': 'gzip, deflate',
+      'Content-Type': 'application/json',
+    };
+
+    // Use Expo Access Token if available (required for some EAS projects)
+    if (process.env.EXPO_ACCESS_TOKEN) {
+      headers['Authorization'] = `Bearer ${process.env.EXPO_ACCESS_TOKEN}`;
+    }
+
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Accept-Encoding': 'gzip, deflate',
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(message)
     });
 
     const result = await response.json();
 
-    if (result?.data?.status === 'error') {
-      console.log('❌ Push notification error:', result.data.message);
-    } else {
-      console.log('✅ Push notification sent:', title);
+    // Handle global errors from Expo
+    if (result.errors) {
+      console.log('❌ Expo API errors:', JSON.stringify(result.errors));
+      return;
+    }
+
+    // Expo returns an array in 'data' for each message sent
+    if (result.data) {
+      const dataArray = Array.isArray(result.data) ? result.data : [result.data];
+      
+      dataArray.forEach((receipt, index) => {
+        if (receipt.status === 'error') {
+          console.log(`❌ Push delivery error: ${receipt.message}`);
+          if (receipt.details) {
+            console.log(`   Details: ${JSON.stringify(receipt.details)}`);
+          }
+        } else {
+          console.log(`✅ Push notification sent: ${title}`);
+        }
+      });
     }
   } catch (error) {
     console.log('❌ Push send failed:', error.message);
