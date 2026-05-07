@@ -1,13 +1,6 @@
-const express      = require('express');
 const dotenv       = require('dotenv');
-const cors         = require('cors');
-const helmet       = require('helmet');
-const morgan       = require('morgan');
-const connectDB    = require('./config/db');
-
-// ── Load env variables first ───────────────────────────
 dotenv.config();
-const Sentry = require('@sentry/node');
+const Sentry       = require('@sentry/node');
 
 // ── Initialize Sentry FIRST before everything else ────
 Sentry.init({
@@ -26,9 +19,17 @@ Sentry.init({
     return event;
   }
 });
+
+const express      = require('express');
+const cors         = require('cors');
+const helmet       = require('helmet');
+const morgan       = require('morgan');
+const connectDB    = require('./config/db');
+
 connectDB();
 
 const app = express();
+app.set('trust proxy', 1);
 const server = require('http').createServer(app);
 
 // ─────────────────────────────────────────────────────────

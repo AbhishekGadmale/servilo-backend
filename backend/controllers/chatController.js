@@ -171,4 +171,4 @@ const getChatList = async (req, res) => {
   }
 };
 
-module.exports = { getChatHistory, uploadChatImage, markMessagesAsRead, getChatList };
+module.exports = { getChatHistory, uploadChatImage, uploadChatAudio, markMessagesAsRead, getChatList };
