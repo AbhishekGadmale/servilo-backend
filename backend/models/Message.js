@@ -33,6 +33,14 @@ const messageSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  audio: {
+    type: String,
+    default: ''
+  },
+  isDelivered: {
+    type: Boolean,
+    default: false
+  },
   isRead: {
     type: Boolean,
     default: false

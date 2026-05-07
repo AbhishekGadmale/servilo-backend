@@ -7,10 +7,11 @@ const Shop = require('../models/Shop');
 const getChatHistory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { type } = req.query; // 'booking' or 'inquiry'
+    const { type, page = 1, limit = 20 } = req.query;
 
     let messages;
     let isAuthorized = false;
+    let query = {};
 
     if (type === 'booking') {
       const booking = await Booking.findById(id).populate('shopId', 'ownerId');
@@ -20,13 +21,9 @@ const getChatHistory = async (req, res) => {
       const isProvider = booking.shopId.ownerId.toString() === req.user.id;
       if (isCustomer || isProvider || req.user.role === 'admin') isAuthorized = true;
 
-      messages = await Message.find({ bookingId: id }).sort({ createdAt: 1 });
+      query = { bookingId: id };
     } else {
-      // Inquiry: id is shopId. We also need the user involved.
-      // If customer is requesting, we use their id. 
-      // If provider is requesting, they must pass the customerId in query.
       const customerId = req.query.customerId || req.user.id;
-      
       const shop = await Shop.findById(id);
       if (!shop) return res.status(404).json({ message: 'Shop not found' });
 
@@ -34,16 +31,25 @@ const getChatHistory = async (req, res) => {
       const isProvider = shop.ownerId.toString() === req.user.id;
       if (isCustomer || isProvider || req.user.role === 'admin') isAuthorized = true;
 
-      messages = await Message.find({ 
+      query = { 
         shopId: id, 
         bookingId: { $exists: false },
         $or: [{ senderId: customerId }, { receiverId: customerId }]
-      }).sort({ createdAt: 1 });
+      };
     }
 
     if (!isAuthorized) {
       return res.status(403).json({ message: 'Not authorized to view this chat' });
     }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    messages = await Message.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Message.countDocuments(query);
 
     // Populate sender details for all messages
     const populatedMessages = await Message.populate(messages, {
@@ -51,7 +57,12 @@ const getChatHistory = async (req, res) => {
       select: 'name profileImage'
     });
 
-    res.status(200).json({ success: true, messages: populatedMessages });
+    // Return newest first for the client (better for inverted FlatList)
+    res.status(200).json({ 
+      success: true, 
+      messages: populatedMessages,
+      hasMore: total > skip + messages.length
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -70,6 +81,22 @@ const uploadChatImage = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Upload failed', error: error.message });
+  }
+};
+
+// @route   POST /api/chat/audio
+// @access  Private
+const uploadChatAudio = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No audio file uploaded' });
+    }
+    res.status(200).json({
+      success: true,
+      audioUrl: req.file.path
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Audio upload failed', error: error.message });
   }
 };
 

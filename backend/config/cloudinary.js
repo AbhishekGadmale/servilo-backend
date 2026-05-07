@@ -17,6 +17,16 @@ const storage = new CloudinaryStorage({
   }
 });
 
-const upload = multer({ storage });
+const audioStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'servilo/audio',
+    resource_type: 'video', // Cloudinary uses 'video' for audio files
+    allowed_formats: ['m4a', 'mp3', 'wav', 'aac', 'ogg', '3gp']
+  }
+});
 
-module.exports = { cloudinary, upload };
+const upload = multer({ storage });
+const audioUpload = multer({ storage: audioStorage });
+
+module.exports = { cloudinary, upload, audioUpload };

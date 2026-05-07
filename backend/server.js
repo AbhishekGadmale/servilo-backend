@@ -64,22 +64,58 @@ const io = require('socket.io')(server, {
 const Message = require('./models/Message');
 const User = require('./models/User');
 
+const onlineUsers = new Map(); // userId -> Set(socketIds)
+
 // Socket.io Logic
-// ... (rest of socket logic)
 io.on('connection', (socket) => {
   console.log('⚡ User connected:', socket.id);
+
+  socket.on('register_user', (userId) => {
+    socket.userId = userId;
+    if (!onlineUsers.has(userId)) {
+      onlineUsers.set(userId, new Set());
+    }
+    onlineUsers.get(userId).add(socket.id);
+    io.emit('user_status_change', { userId, status: 'online' });
+  });
+
+  socket.on('get_user_status', (userId, callback) => {
+    const isOnline = onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
+    if (typeof callback === 'function') {
+      callback({ isOnline });
+    }
+  });
 
   socket.on('join_room', (bookingId) => {
     socket.join(bookingId);
     console.log(`👤 User ${socket.id} joined room: ${bookingId}`);
   });
 
+  socket.on('typing', (data) => {
+    const { bookingId, userId } = data;
+    socket.to(bookingId).emit('user_typing', { userId });
+  });
+
+  socket.on('stop_typing', (data) => {
+    const { bookingId, userId } = data;
+    socket.to(bookingId).emit('user_stop_typing', { userId });
+  });
+
+  socket.on('mark_read', (data) => {
+    const { bookingId, userId } = data;
+    socket.to(bookingId).emit('messages_read', { userId });
+  });
+
   socket.on('send_message', async (data) => {
-    const { bookingId, shopId, senderId, receiverId, message, image } = data;
+    const { bookingId, shopId, senderId, receiverId, message, image, audio } = data;
 
     try {
       const isObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
       const isBookingIdValid = isObjectId(bookingId);
+
+      const clientsInRoom = io.sockets.adapter.rooms.get(bookingId);
+      const numClients = clientsInRoom ? clientsInRoom.size : 0;
+      const isDelivered = numClients >= 2;
 
       const newMessage = await Message.create({
         bookingId: isBookingIdValid ? bookingId : undefined,
@@ -87,8 +123,10 @@ io.on('connection', (socket) => {
         shopId,
         senderId,
         receiverId,
-        message,
-        image: image || ''
+        message: message || '',
+        image: image || '',
+        audio: audio || '',
+        isDelivered
       });
 
       const populatedMessage = await newMessage.populate('senderId', 'name profileImage');
@@ -96,6 +134,41 @@ io.on('connection', (socket) => {
       // Always emit to the room name provided by the client (ObjectId or inquiry string)
       io.to(bookingId).emit('receive_message', populatedMessage);
       console.log(`📩 Message sent in room ${bookingId}`);
+
+      // --- PUSH NOTIFICATION LOGIC ---
+      // If the receiver is not in the room, send a push notification
+      if (numClients < 2) {
+        try {
+          const { notifyUser, notifyProvider } = require('./utils/notifications');
+          const receiver = await User.findById(receiverId);
+          const sender = await User.findById(senderId);
+          
+          if (receiver && receiver.expoPushToken) {
+            const title = `New message from ${sender?.name || 'Someone'}`;
+            let body = message;
+            if (!body) {
+              if (image) body = '📷 Sent an image';
+              else if (audio) body = '🎤 Sent a voice message';
+              else body = 'New message';
+            }
+            
+            const notificationData = { 
+              bookingId: isBookingIdValid ? bookingId : undefined, 
+              shopId, 
+              type: 'chat',
+              screen: 'ChatScreen' 
+            };
+
+            if (receiver.role === 'provider') {
+              await notifyProvider(receiverId, title, body, notificationData);
+            } else {
+              await notifyUser(receiverId, title, body, notificationData);
+            }
+          }
+        } catch (err) {
+          console.error('❌ Push notification error in socket:', err.message);
+        }
+      }
     } catch (error) {
       console.error('❌ Socket message error:', error.message);
     }
@@ -122,6 +195,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    if (socket.userId && onlineUsers.has(socket.userId)) {
+      const userSockets = onlineUsers.get(socket.userId);
+      userSockets.delete(socket.id);
+      if (userSockets.size === 0) {
+        onlineUsers.delete(socket.userId);
+        io.emit('user_status_change', { userId: socket.userId, status: 'offline' });
+      }
+    }
     console.log('👋 User disconnected');
   });
 });
