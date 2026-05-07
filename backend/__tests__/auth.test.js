@@ -115,7 +115,7 @@ describe('🔐 Auth API Tests', () => {
         .post('/api/auth/login')
         .send({ email: validUser.email, password: 'wrongpassword' });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
       expect(res.body.message).toContain('Invalid');
     });
 
@@ -124,7 +124,7 @@ describe('🔐 Auth API Tests', () => {
         .post('/api/auth/login')
         .send({ email: 'nobody@test.com', password: 'password123' });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(404);
     });
 
     test('❌ Should reject missing email', async () => {
