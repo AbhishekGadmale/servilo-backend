@@ -153,13 +153,12 @@ io.on('connection', (socket) => {
               else body = 'New message';
             }
             
-            const notificationData = { 
-              bookingId: isBookingIdValid ? bookingId : undefined, 
-              shopId, 
+            const notificationData = {
+              bookingId: isBookingIdValid ? bookingId : undefined,
+              shopId,
               type: 'chat',
-              screen: 'ChatScreen' 
+              screen: 'Chat'
             };
-
             if (receiver.role === 'provider') {
               await notifyProvider(receiverId, title, body, notificationData);
             } else {

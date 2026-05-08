@@ -49,7 +49,8 @@ const addReview = async (req, res) => {
         await notifyProvider(
           updatedShop.ownerId,
           '⭐ New Review!',
-          `Someone left a ${rating}-star review for "${updatedShop.shopName}".`
+          `Someone left a ${rating}-star review for "${updatedShop.shopName}".`,
+          { screen: 'Dashboard', type: 'review' }
         );
       }
     }

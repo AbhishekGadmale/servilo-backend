@@ -26,13 +26,13 @@ const notifyQueuePositions = async (shopId, staffId = null) => {
 
     if (position === 3)
       await sendPushNotification(b.userId.expoPushToken,
-        '⏰ Almost Your Turn!', 'You are 3rd in queue. Get ready!');
+        '⏰ Almost Your Turn!', 'You are 3rd in queue. Get ready!', { screen: 'Bookings', type: 'booking' });
     else if (position === 2)
       await sendPushNotification(b.userId.expoPushToken,
-        '🔔 Next Up!', 'You are 2nd in queue. Head to the shop!');
+        '🔔 Next Up!', 'You are 2nd in queue. Head to the shop!', { screen: 'Bookings', type: 'booking' });
     else if (position === 1)
       await sendPushNotification(b.userId.expoPushToken,
-        '✅ Your Turn!', 'You are next! Please proceed.');
+        '✅ Your Turn!', 'You are next! Please proceed.', { screen: 'Bookings', type: 'booking' });
   }
 };
 
@@ -161,7 +161,8 @@ const createBooking = async (req, res) => {
       mechanic: `New mechanic request: ${mechanicData?.vehicleType || 'vehicle'} - ${mechanicData?.problemType?.replace(/_/g, ' ') || 'problem'}`
     };
     await notifyProvider(shop.ownerId, '🔔 New Booking!',
-      notifMessages[serviceType] || 'New booking received');
+      notifMessages[serviceType] || 'New booking received',
+      { screen: 'Queue', bookingId: booking._id, type: 'booking' });
 
     res.status(201).json({ success: true, message: 'Booking created!', booking });
   } catch (error) {
@@ -232,7 +233,11 @@ const updateBookingStatus = async (req, res) => {
       cancelled: { title: '❌ Booking Cancelled', body: `Your booking at ${booking.shopId?.shopName} was cancelled.` }
     };
     if (msgs[status])
-      await notifyUser(booking.userId, msgs[status].title, msgs[status].body);
+      await notifyUser(booking.userId, msgs[status].title, msgs[status].body, {
+        screen: 'Bookings',
+        bookingId: booking._id,
+        type: 'booking'
+      });
 
     // Queue notifications for barber
     const terminalStates = ['completed', 'rejected', 'cancelled'];
@@ -285,7 +290,8 @@ const cancelBooking = async (req, res) => {
       await notifyProvider(
         shop.ownerId,
         '❌ Booking Cancelled',
-        `A customer has cancelled their booking for ${booking.serviceType}.`
+        `A customer has cancelled their booking for ${booking.serviceType}.`,
+        { screen: 'Queue', bookingId: booking._id, type: 'booking' }
       );
     }
 
@@ -331,7 +337,8 @@ const markArrived = async (req, res) => {
       await notifyProvider(
         shop.ownerId,
         '👤 Customer Arriving!',
-        `Customer is on their way for queue #${booking.barberData.queueNumber}`
+        `Customer is on their way for queue #${booking.barberData.queueNumber}`,
+        { screen: 'Queue', bookingId: booking._id, type: 'booking' }
       );
     }
 
@@ -442,7 +449,11 @@ const nextCustomer = async (req, res) => {
     if (nextInLine) {
       nextInLine.status = 'confirmed';
       await nextInLine.save();
-      await notifyUser(nextInLine.userId, '🔔 You are Next!', `The barber is ready for you at ${shop.shopName}!`);
+      await notifyUser(nextInLine.userId, '🔔 You are Next!', `The barber is ready for you at ${shop.shopName}!`, {
+        screen: 'Bookings',
+        bookingId: nextInLine._id,
+        type: 'booking'
+      });
     }
 
     res.status(200).json({

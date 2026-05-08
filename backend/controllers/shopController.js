@@ -320,7 +320,8 @@ const approveShop = async (req, res) => {
     await notifyProvider(
       shop.ownerId,
       '🎉 Shop Approved!',
-      `Congratulations! Your shop "${shop.shopName}" has been approved and is now live.`
+      `Congratulations! Your shop "${shop.shopName}" has been approved and is now live.`,
+      { screen: 'Dashboard', type: 'approval' }
     );
 
     res.status(200).json({ success: true, message: 'Shop approved!', shop });
