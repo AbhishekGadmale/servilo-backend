@@ -78,34 +78,40 @@ const sendPushNotification = async (token, title, body, data = {}) => {
 };
 
 /**
- * Notify a regular user (customer)
+ * Private helper to notify any user by ID
  */
-const notifyUser = async (userId, title, body, data = {}) => {
+const _notifyUserById = async (userId, title, body, data = {}, roleLabel = 'user') => {
   try {
-    const user = await User.findById(userId).select('expoPushToken notificationsEnabled');
-    if (!user) { console.log('User not found for notification'); return; }
-    if (!user.notificationsEnabled) { console.log('Notifications disabled for user'); return; }
-    if (!user.expoPushToken) { console.log('No push token for user:', userId); return; }
+    const user = await User.findById(userId).select('expoPushToken notificationsEnabled name');
+    if (!user) {
+      console.log(`⚠️ ${roleLabel} not found for notification:`, userId);
+      return;
+    }
+    if (!user.notificationsEnabled) {
+      console.log(`🔇 Notifications disabled for ${roleLabel}:`, user.name);
+      return;
+    }
+    if (!user.expoPushToken) {
+      console.log(`🚫 No push token for ${roleLabel}:`, user.name);
+      return;
+    }
     await sendPushNotification(user.expoPushToken, title, body, data);
   } catch (error) {
-    console.log('notifyUser error:', error.message);
+    console.log(`❌ _notifyUserById error (${roleLabel}):`, error.message);
   }
 };
 
 /**
+ * Notify a regular user (customer)
+ */
+const notifyUser = (userId, title, body, data = {}) => 
+  _notifyUserById(userId, title, body, data, 'customer');
+
+/**
  * Notify a provider (shop owner)
  */
-const notifyProvider = async (ownerId, title, body, data = {}) => {
-  try {
-    const owner = await User.findById(ownerId).select('expoPushToken notificationsEnabled');
-    if (!owner) { console.log('Owner not found for notification'); return; }
-    if (!owner.notificationsEnabled) { console.log('Notifications disabled for owner'); return; }
-    if (!owner.expoPushToken) { console.log('No push token for owner:', ownerId); return; }
-    await sendPushNotification(owner.expoPushToken, title, body, data);
-  } catch (error) {
-    console.log('notifyProvider error:', error.message);
-  }
-};
+const notifyProvider = (ownerId, title, body, data = {}) => 
+  _notifyUserById(ownerId, title, body, data, 'provider');
 
 module.exports = {
   sendPushNotification,

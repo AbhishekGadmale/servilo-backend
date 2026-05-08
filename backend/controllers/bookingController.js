@@ -153,12 +153,12 @@ const createBooking = async (req, res) => {
 
     // Notify provider
     const notifMessages = {
-      barber: `New queue booking for ${barberData?.serviceName}`,
-      food: `New food order! Total: ₹${orderData?.totalAmount}`,
-      hardware: `New product order! Total: ₹${orderData?.totalAmount}`,
-      electrician: `New electrician request: ${electricianData?.issueType}`,
-      plumber: `New plumber request: ${plumberData?.issueType}`,
-      mechanic: `New mechanic request: ${mechanicData?.vehicleType} - ${mechanicData?.problemType}`
+      barber: `New queue booking for ${barberData?.serviceName || 'a service'}`,
+      food: `New food order! Total: ₹${orderData?.totalAmount || 0}`,
+      hardware: `New product order! Total: ₹${orderData?.totalAmount || 0}`,
+      electrician: `New electrician request: ${electricianData?.issueType?.replace(/_/g, ' ') || 'issue'}`,
+      plumber: `New plumber request: ${plumberData?.issueType?.replace(/_/g, ' ') || 'issue'}`,
+      mechanic: `New mechanic request: ${mechanicData?.vehicleType || 'vehicle'} - ${mechanicData?.problemType?.replace(/_/g, ' ') || 'problem'}`
     };
     await notifyProvider(shop.ownerId, '🔔 New Booking!',
       notifMessages[serviceType] || 'New booking received');
