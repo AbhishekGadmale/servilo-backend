@@ -427,7 +427,6 @@ module.exports = {
   verifyOTP,
   googleLogin,
   getProfile, 
-...
   getAdminStats, 
   updateProfile, 
   getAllUsers, 

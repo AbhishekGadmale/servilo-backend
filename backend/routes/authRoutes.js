@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const { body, validationResult } = require('express-validator');
 const {
-  signup, login, sendOTP, verifyOTP, getProfile,
+  signup, login, sendOTP, verifyOTP, googleLogin, getProfile,
   getAdminStats, updateProfile,
   getAllUsers, deleteUser,
   toggleUserSuspension, getReferralStats
