@@ -27,7 +27,9 @@ const messageSchema = new mongoose.Schema({
   },
   message: {
     type: String,
-    required: true
+    required: function() {
+      return !this.image && !this.audio;
+    }
   },
   image: {
     type: String,

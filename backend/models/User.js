@@ -1,10 +1,17 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-  name: { type: String, required: true, trim: true },
+  name: { type: String, trim: true }, // Not required for OTP-start
   email: { type: String, required: true, unique: true, lowercase: true },
-  password: { type: String, required: true },
-  phone: { type: String, required: true },
+  password: { 
+    type: String, 
+    required: function() { return !this.googleId; } // Only required if not Google login
+  },
+  phone: { type: String }, // Optional for social login
+  otp: { type: String },
+  otpExpires: { type: Date },
+  googleId: { type: String, unique: true, sparse: true },
+  isEmailVerified: { type: Boolean, default: false },
   isSuspended: { type: Boolean, default: false },
   role: {
     type: String,

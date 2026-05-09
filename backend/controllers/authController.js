@@ -1,6 +1,10 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { sendOTPEmail } = require('../utils/email');
+const { OAuth2Client } = require('google-auth-library');
+
+const client = new OAuth2Client(process.env.GOOGLE_WEB_CLIENT_ID);
 
 // Generate JWT Token
 const generateToken = (id, role) => {
@@ -12,6 +16,148 @@ const generateToken = (id, role) => {
 // Helper: Generate unique 6-char referral code
 const generateReferralCode = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
+};
+
+// @route   POST /api/auth/send-otp
+// @access  Public
+const sendOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Find user or create temporary one
+    let user = await User.findOne({ email });
+    if (!user) {
+      // Create user if doesn't exist (Registration via OTP)
+      user = new User({ 
+        email, 
+        role: 'customer',
+        referralCode: generateReferralCode() 
+      });
+    }
+
+    // Hash OTP for security
+    const salt = await bcrypt.genSalt(10);
+    user.otp = await bcrypt.hash(otp, salt);
+    user.otpExpires = otpExpires;
+    await user.save();
+
+    // Send Email
+    await sendOTPEmail(email, otp);
+
+    res.status(200).json({ success: true, message: 'OTP sent to your email' });
+  } catch (error) {
+    console.error('Send OTP Error:', error);
+    res.status(500).json({ message: 'Failed to send OTP', error: error.message });
+  }
+};
+
+// @route   POST /api/auth/verify-otp
+// @access  Public
+const verifyOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ message: 'Email and OTP are required' });
+
+    const user = await User.findOne({ email });
+    if (!user || !user.otp) return res.status(404).json({ message: 'No OTP requested for this email' });
+
+    // Check expiry
+    if (new Date() > user.otpExpires) {
+      return res.status(400).json({ message: 'OTP has expired' });
+    }
+
+    // Verify OTP
+    const isMatch = await bcrypt.compare(otp, user.otp);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Invalid OTP' });
+    }
+
+    // Clear OTP fields and verify email
+    user.otp = undefined;
+    user.otpExpires = undefined;
+    user.isEmailVerified = true;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful!',
+      token: generateToken(user._id, user.role),
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isNewUser: !user.name // If no name, they need to complete profile
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// @route   POST /api/auth/google
+// @access  Public
+const googleLogin = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+    if (!idToken) return res.status(400).json({ message: 'ID Token is required' });
+
+    // Verify token with Google
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: [
+        process.env.GOOGLE_ANDROID_CLIENT_ID,
+        process.env.GOOGLE_IOS_CLIENT_ID,
+        process.env.GOOGLE_WEB_CLIENT_ID
+      ].filter(Boolean)
+    });
+    
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name, picture: profileImage } = payload;
+
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (!user) {
+      // Create new user if doesn't exist
+      user = await User.create({
+        googleId,
+        email,
+        name,
+        profileImage,
+        role: 'customer',
+        isEmailVerified: true,
+        referralCode: generateReferralCode()
+      });
+    } else if (!user.googleId) {
+      // Link Google account to existing email account
+      user.googleId = googleId;
+      if (!user.profileImage) user.profileImage = profileImage;
+      await user.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful!',
+      token: generateToken(user._id, user.role),
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        profileImage: user.profileImage
+      }
+    });
+  } catch (error) {
+    console.error('Google Login Error:', error);
+    res.status(500).json({ message: 'Google authentication failed', error: error.message });
+  }
 };
 
 // @route   POST /api/auth/signup
@@ -274,5 +420,18 @@ const getReferralStats = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
-
-module.exports = { signup, login, getProfile, getAdminStats, updateProfile, getAllUsers, deleteUser, toggleUserSuspension, getReferralStats };
+module.exports = { 
+  signup, 
+  login, 
+  sendOTP, 
+  verifyOTP,
+  googleLogin,
+  getProfile, 
+...
+  getAdminStats, 
+  updateProfile, 
+  getAllUsers, 
+  deleteUser, 
+  toggleUserSuspension, 
+  getReferralStats 
+};

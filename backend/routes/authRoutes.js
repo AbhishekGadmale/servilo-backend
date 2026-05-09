@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const { body, validationResult } = require('express-validator');
 const {
-  signup, login, getProfile,
+  signup, login, sendOTP, verifyOTP, getProfile,
   getAdminStats, updateProfile,
   getAllUsers, deleteUser,
   toggleUserSuspension, getReferralStats
@@ -11,7 +11,7 @@ const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 
 // Import per-route rate limiters from the dedicated middleware module.
 // IMPORTANT: These are applied only to login & signup — NOT to admin/data routes.
-const { loginLimiter, signupLimiter } = require('../middleware/rateLimiters');
+const { loginLimiter, signupLimiter, otpLimiter } = require('../middleware/rateLimiters');
 
 // ── Reusable validation error handler ──────────────────
 const handleValidation = (req, res, next) => {
@@ -69,6 +69,36 @@ router.post('/login',
   ],
   handleValidation,
   login
+);
+
+router.post('/google', googleLogin);
+
+// ── POST /api/auth/send-otp ─────────────────────────────
+router.post('/send-otp',
+  otpLimiter,
+  [
+    body('email')
+      .trim()
+      .not().isEmpty().withMessage('Email is required')
+      .isEmail().withMessage('Please enter a valid email address'),
+  ],
+  handleValidation,
+  sendOTP
+);
+
+// ── POST /api/auth/verify-otp ──────────────────────────
+router.post('/verify-otp',
+  [
+    body('email')
+      .trim()
+      .not().isEmpty().withMessage('Email is required')
+      .isEmail().withMessage('Please enter a valid email address'),
+    body('otp')
+      .not().isEmpty().withMessage('OTP is required')
+      .isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
+  ],
+  handleValidation,
+  verifyOTP
 );
 
 // ── GET /api/auth/profile ───────────────────────────────
