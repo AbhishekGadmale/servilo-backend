@@ -1,9 +1,21 @@
 const { Resend } = require('resend');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 const sendOTPEmail = async (email, otp) => {
   try {
+    const apiKey = process.env.RESEND_API_KEY;
+    
+    if (!apiKey) {
+      console.error('❌ RESEND_API_KEY is not configured in .env file.');
+      // In development, we might want to log the OTP to console so we can still test
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DEV ONLY] OTP for ${email}: ${otp}`);
+        return { mock: true, message: 'Email skipped (missing API key)' };
+      }
+      throw new Error('Email service configuration missing.');
+    }
+
+    const resend = new Resend(apiKey);
+
     const { data, error } = await resend.emails.send({
       from: 'Servilo <onboarding@resend.dev>', // You can update this to your domain later
       to: [email],
@@ -25,7 +37,7 @@ const sendOTPEmail = async (email, otp) => {
 
     if (error) {
       console.error('Resend Error:', error);
-      throw new Error(error.message);
+      throw new Error(error.message || 'Failed to send email via Resend');
     }
 
     return data;

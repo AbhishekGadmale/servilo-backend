@@ -13,9 +13,14 @@ const generateToken = (id, role) => {
   });
 };
 
-// Helper: Generate unique 6-char referral code
+// Helper: Generate unique 8-char referral code
 const generateReferralCode = () => {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 };
 
 // @route   POST /api/auth/send-otp
@@ -47,12 +52,21 @@ const sendOTP = async (req, res) => {
     await user.save();
 
     // Send Email
-    await sendOTPEmail(email, otp);
+    try {
+      await sendOTPEmail(email, otp);
+    } catch (emailError) {
+      console.error('Send OTP email failed:', emailError.message);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to send verification email. Please try again later.',
+        error: emailError.message 
+      });
+    }
 
     res.status(200).json({ success: true, message: 'OTP sent to your email' });
   } catch (error) {
     console.error('Send OTP Error:', error);
-    res.status(500).json({ message: 'Failed to send OTP', error: error.message });
+    res.status(500).json({ message: 'Server error during OTP request', error: error.message });
   }
 };
 
@@ -193,17 +207,35 @@ const signup = async (req, res) => {
       assignedRole = 'admin';
     }
 
-    // Create user
-    const user = await User.create({
-      name,
-      email,
-      phone,
-      password: hashedPassword,
-      role: assignedRole,
-      referredBy,
-      referralCode: generateReferralCode(),
-      isEmailVerified: false
-    });
+    // Create user with retry logic for unique referralCode
+    let user;
+    let retries = 3;
+    let lastError;
+    
+    while (retries > 0) {
+      try {
+        user = await User.create({
+          name,
+          email,
+          phone,
+          password: hashedPassword,
+          role: assignedRole,
+          referredBy,
+          referralCode: generateReferralCode(),
+          isEmailVerified: false
+        });
+        break; 
+      } catch (err) {
+        lastError = err;
+        if (err.code === 11000) {
+          retries--;
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (!user) throw lastError || new Error('Failed to create user after multiple attempts');
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -216,7 +248,19 @@ const signup = async (req, res) => {
     await user.save();
 
     // Send Email
-    await sendOTPEmail(email, otp);
+    try {
+      await sendOTPEmail(email, otp);
+    } catch (emailError) {
+      console.error('Signup email sending failed:', emailError.message);
+      // We don't want to fail the whole signup if just the email fails,
+      // but we should inform the user they can resend it.
+      return res.status(201).json({
+        success: true,
+        requireOtp: true,
+        message: 'Account created, but verification email failed to send. Please use "Resend OTP".',
+        email: user.email
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -226,7 +270,11 @@ const signup = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Signup Error:', error);
+    res.status(500).json({ 
+      message: 'Registration failed', 
+      error: process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message 
+    });
   }
 };
 
@@ -257,7 +305,18 @@ const login = async (req, res) => {
       user.otp = await bcrypt.hash(otp, salt);
       user.otpExpires = otpExpires;
       await user.save();
-      await sendOTPEmail(email, otp);
+      
+      try {
+        await sendOTPEmail(email, otp);
+      } catch (emailError) {
+        console.error('Login verification email failed:', emailError.message);
+        return res.status(401).json({ 
+          success: true,
+          requireOtp: true, 
+          message: 'Please verify your email. We tried to send a new code but the email service failed. Please try "Resend OTP" in a moment.',
+          email: user.email 
+        });
+      }
 
       return res.status(401).json({ 
         success: true,
