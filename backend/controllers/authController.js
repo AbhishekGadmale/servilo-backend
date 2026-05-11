@@ -201,21 +201,28 @@ const signup = async (req, res) => {
       password: hashedPassword,
       role: assignedRole,
       referredBy,
-      referralCode: generateReferralCode()
+      referralCode: generateReferralCode(),
+      isEmailVerified: false
     });
 
-    // Return token
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Hash OTP for security
+    const otpSalt = await bcrypt.genSalt(10);
+    user.otp = await bcrypt.hash(otp, otpSalt);
+    user.otpExpires = otpExpires;
+    await user.save();
+
+    // Send Email
+    await sendOTPEmail(email, otp);
+
     res.status(201).json({
       success: true,
-      message: 'Account created successfully!',
-      token: generateToken(user._id, user.role),
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role
-      }
+      requireOtp: true,
+      message: 'OTP sent to your email. Please verify.',
+      email: user.email
     });
 
   } catch (error) {
@@ -239,6 +246,25 @@ const login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+      // Send a new OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+      const salt = await bcrypt.genSalt(10);
+      user.otp = await bcrypt.hash(otp, salt);
+      user.otpExpires = otpExpires;
+      await user.save();
+      await sendOTPEmail(email, otp);
+
+      return res.status(401).json({ 
+        success: true,
+        requireOtp: true, 
+        message: 'Please verify your email before logging in. OTP sent.',
+        email: user.email 
+      });
     }
 
     // Return token

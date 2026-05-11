@@ -22,7 +22,7 @@ const audioStorage = new CloudinaryStorage({
   params: {
     folder: 'servilo/audio',
     resource_type: 'video', // Cloudinary uses 'video' for audio files
-    allowed_formats: ['m4a', 'mp3', 'wav', 'aac', 'ogg', '3gp']
+    allowed_formats: ['m4a', 'mp3', 'wav', 'aac', 'ogg', '3gp', 'mp4']
   }
 });
 
