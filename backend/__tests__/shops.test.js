@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('./testApp');
+const { signUpAndVerify } = require('./testUtils');
 require('./setup');
 
 describe('🏪 Shop API Tests', () => {
@@ -32,13 +33,13 @@ describe('🏪 Shop API Tests', () => {
 
   beforeEach(async () => {
     const [c, p, a] = await Promise.all([
-      request(app).post('/api/auth/signup').send(customer),
-      request(app).post('/api/auth/signup').send(provider),
-      request(app).post('/api/auth/signup').send(admin)
+      signUpAndVerify(app, customer),
+      signUpAndVerify(app, provider),
+      signUpAndVerify(app, admin)
     ]);
-    customerToken = c.body.token;
-    providerToken = p.body.token;
-    adminToken = a.body.token;
+    customerToken = c.token;
+    providerToken = p.token;
+    adminToken = a.token;
   });
 
   // ── CREATE SHOP ──────────────────────────────────────

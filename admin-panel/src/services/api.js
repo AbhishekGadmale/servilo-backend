@@ -45,6 +45,8 @@ api.interceptors.response.use(
 
 // ── Auth ─────────────────────────────────────────────────
 export const loginAPI = (data) => api.post('/auth/login', data);
+export const sendOTPAPI = (email) => api.post('/auth/send-otp', { email });
+export const verifyOTPAPI = (email, otp) => api.post('/auth/verify-otp', { email, otp });
 
 // ── Admin: Stats & Users ──────────────────────────────────
 export const getStatsAPI    = () => api.get('/auth/admin/stats');

@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('./testApp');
+const { signUpAndVerify } = require('./testUtils');
 require('./setup');
 
 describe('⭐ Review API Tests', () => {
@@ -8,22 +9,22 @@ describe('⭐ Review API Tests', () => {
 
   beforeEach(async () => {
     const [c, p, a] = await Promise.all([
-      request(app).post('/api/auth/signup').send({
+      signUpAndVerify(app, {
         name: 'Customer', email: 'c@test.com',
         phone: '9999999999', password: 'password123', role: 'customer'
       }),
-      request(app).post('/api/auth/signup').send({
+      signUpAndVerify(app, {
         name: 'Provider', email: 'p@test.com',
         phone: '8888888888', password: 'password123', role: 'provider'
       }),
-      request(app).post('/api/auth/signup').send({
+      signUpAndVerify(app, {
         name: 'Admin', email: 'a@test.com',
         phone: '7777777777', password: 'password123', role: 'admin'
       })
     ]);
-    customerToken = c.body.token;
-    providerToken = p.body.token;
-    adminToken = a.body.token;
+    customerToken = c.token;
+    providerToken = p.token;
+    adminToken = a.token;
 
     const shop = await request(app)
       .post('/api/shops/create')
@@ -36,11 +37,32 @@ describe('⭐ Review API Tests', () => {
         coordinates: [73.8567, 18.5204]
       });
 
+    shopId = shop.body.shop._id;
+
     await request(app)
-      .put(`/api/shops/${shop.body.shop._id}/approve`)
+      .put(`/api/shops/${shopId}/approve`)
       .set('Authorization', `Bearer ${adminToken}`);
 
-    shopId = shop.body.shop._id;
+    // Create a completed booking so the customer can review
+    const booking = await request(app)
+      .post('/api/bookings/book')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({
+        shopId,
+        serviceType: 'barber',
+        bookingType: 'queue',
+        barberData: { serviceName: 'Haircut', price: 100 }
+      });
+
+    await request(app)
+      .put(`/api/bookings/${booking.body.booking._id}/status`)
+      .set('Authorization', `Bearer ${providerToken}`)
+      .send({ status: 'confirmed' });
+
+    await request(app)
+      .put(`/api/bookings/${booking.body.booking._id}/status`)
+      .set('Authorization', `Bearer ${providerToken}`)
+      .send({ status: 'completed' });
   });
 
   test('✅ Customer can add a review', async () => {

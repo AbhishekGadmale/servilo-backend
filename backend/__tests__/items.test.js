@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('./testApp');
+const { signUpAndVerify } = require('./testUtils');
 require('./setup');
 
 describe('🔧 Item Management Tests', () => {
@@ -8,17 +9,17 @@ describe('🔧 Item Management Tests', () => {
 
   beforeEach(async () => {
     const [p, a] = await Promise.all([
-      request(app).post('/api/auth/signup').send({
+      signUpAndVerify(app, {
         name: 'Provider', email: 'p@test.com',
         phone: '8888888888', password: 'password123', role: 'provider'
       }),
-      request(app).post('/api/auth/signup').send({
+      signUpAndVerify(app, {
         name: 'Admin', email: 'a@test.com',
         phone: '7777777777', password: 'password123', role: 'admin'
       })
     ]);
-    providerToken = p.body.token;
-    adminToken = a.body.token;
+    providerToken = p.token;
+    adminToken = a.token;
 
     const shop = await request(app)
       .post('/api/shops/create')
@@ -91,14 +92,14 @@ describe('🔧 Item Management Tests', () => {
   });
 
   test('❌ Non-owner cannot add items', async () => {
-    const other = await request(app).post('/api/auth/signup').send({
+    const other = await signUpAndVerify(app, {
       name: 'Other', email: 'other@test.com',
       phone: '6666666666', password: 'password123', role: 'provider'
     });
 
     const res = await request(app)
       .post(`/api/shops/${shopId}/items`)
-      .set('Authorization', `Bearer ${other.body.token}`)
+      .set('Authorization', `Bearer ${other.token}`)
       .send({ name: 'Hack Service', price: 10, duration: 5 });
 
     expect(res.status).toBe(403);

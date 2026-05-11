@@ -1,6 +1,6 @@
+require('./setup');
 const request = require('supertest');
 const app = require('./testApp');
-require('./setup');
 
 describe('🔐 Auth API Tests', () => {
 
@@ -23,26 +23,36 @@ describe('🔐 Auth API Tests', () => {
   // ── SIGNUP TESTS ─────────────────────────────────────
   describe('POST /api/auth/signup', () => {
 
-    test('✅ Should create a new customer account', async () => {
+    test('✅ Should create a new customer account and verify OTP', async () => {
       const res = await request(app)
         .post('/api/auth/signup')
         .send(validUser);
 
       expect(res.status).toBe(201);
-      expect(res.body.success).toBe(true);
-      expect(res.body.token).toBeDefined();
-      expect(res.body.user.email).toBe(validUser.email);
-      expect(res.body.user.role).toBe('customer');
-      expect(res.body.user.password).toBeUndefined(); // password not exposed
+      expect(res.body.requireOtp).toBe(true);
+
+      const verifyRes = await request(app)
+        .post('/api/auth/verify-otp')
+        .send({ email: validUser.email, otp: global.OTP_MAP[validUser.email] });
+
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.body.token).toBeDefined();
+      expect(verifyRes.body.user.email).toBe(validUser.email);
     });
 
-    test('✅ Should create a provider account', async () => {
+    test('✅ Should create a provider account and verify OTP', async () => {
       const res = await request(app)
         .post('/api/auth/signup')
         .send(validProvider);
 
       expect(res.status).toBe(201);
-      expect(res.body.user.role).toBe('provider');
+      
+      const verifyRes = await request(app)
+        .post('/api/auth/verify-otp')
+        .send({ email: validProvider.email, otp: global.OTP_MAP[validProvider.email] });
+
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.body.user.role).toBe('provider');
     });
 
     test('❌ Should reject missing name', async () => {
@@ -98,6 +108,8 @@ describe('🔐 Auth API Tests', () => {
 
     beforeEach(async () => {
       await request(app).post('/api/auth/signup').send(validUser);
+      // Auto-verify email for login tests
+      await request(app).post('/api/auth/verify-otp').send({ email: validUser.email, otp: global.OTP_MAP[validUser.email] });
     });
 
     test('✅ Should login with correct credentials', async () => {
@@ -140,8 +152,9 @@ describe('🔐 Auth API Tests', () => {
   describe('GET /api/auth/profile', () => {
 
     test('✅ Should get profile with valid token', async () => {
-      const signup = await request(app).post('/api/auth/signup').send(validUser);
-      const token = signup.body.token;
+      await request(app).post('/api/auth/signup').send(validUser);
+      const verifyRes = await request(app).post('/api/auth/verify-otp').send({ email: validUser.email, otp: global.OTP_MAP[validUser.email] });
+      const token = verifyRes.body.token;
 
       const res = await request(app)
         .get('/api/auth/profile')

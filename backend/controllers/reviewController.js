@@ -1,5 +1,6 @@
 const Review = require('../models/Review');
 const Shop = require('../models/Shop');
+const Booking = require('../models/Booking');
 const { notifyProvider } = require('../utils/notifications');
 const mongoose = require('mongoose');
 
@@ -9,7 +10,20 @@ const addReview = async (req, res) => {
   try {
     const { shopId, rating, comment } = req.body;
 
-    // Check if already reviewed
+    // 1. Production Rule: Only verified customers can leave a review
+    const hasCompletedBooking = await Booking.findOne({
+      userId: req.user.id,
+      shopId,
+      status: 'completed'
+    });
+
+    if (!hasCompletedBooking) {
+      return res.status(403).json({ 
+        message: 'You can only review a shop after you have a completed booking with them.' 
+      });
+    }
+
+    // 2. Check if already reviewed
     const existing = await Review.findOne({
       userId: req.user.id,
       shopId

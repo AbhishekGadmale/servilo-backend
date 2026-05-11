@@ -110,13 +110,13 @@ const createBooking = async (req, res) => {
 
     if (serviceType === 'barber') {
       if (assignedStaffId) {
-        // Queue for specific staff
-        const staff = await Staff.findByIdAndUpdate(
-          assignedStaffId,
+        // Queue for specific staff - with ownership check
+        const staff = await Staff.findOneAndUpdate(
+          { _id: assignedStaffId, shopId: shopId },
           { $inc: { currentQueue: 1 } },
-          { returnDocument: 'after' }
+          { new: true }
         );
-        if (!staff) return res.status(404).json({ message: 'Staff member not found' });
+        if (!staff) return res.status(404).json({ message: 'Staff member not found or does not belong to this shop' });
         
         finalBarberData.queueNumber = staff.currentQueue;
         finalBarberData.estimatedWaitTime = staff.currentQueue * (finalBarberData.duration || shop.averageServiceTime || 30);
@@ -125,7 +125,7 @@ const createBooking = async (req, res) => {
         const updatedShop = await Shop.findByIdAndUpdate(
           shopId,
           { $inc: { currentQueue: 1 } },
-          { returnDocument: 'after' }
+          { new: true }
         );
         finalBarberData.queueNumber = updatedShop.currentQueue;
         finalBarberData.estimatedWaitTime = updatedShop.currentQueue * (finalBarberData.duration || shop.averageServiceTime || 30);
@@ -213,6 +213,23 @@ const updateBookingStatus = async (req, res) => {
     }
 
     const previousStatus = booking.status;
+
+    // ─── Secure Status Transitions ───────────────────────────
+    const validTransitions = {
+      'pending': ['confirmed', 'rejected', 'cancelled'],
+      'confirmed': ['in_progress', 'cancelled', 'completed'],
+      'in_progress': ['completed', 'cancelled'],
+      'completed': [],
+      'cancelled': [],
+      'rejected': []
+    };
+
+    if (previousStatus !== status && !validTransitions[previousStatus]?.includes(status)) {
+      return res.status(400).json({ 
+        message: `Invalid status transition from ${previousStatus} to ${status}` 
+      });
+    }
+
     booking.status = status;
     if (providerNote) booking.providerNote = providerNote;
 
@@ -242,19 +259,20 @@ const updateBookingStatus = async (req, res) => {
     // Queue notifications for barber
     const terminalStates = ['completed', 'rejected', 'cancelled'];
     if (booking.serviceType === 'barber' && terminalStates.includes(status) && !terminalStates.includes(previousStatus)) {
-      const shop = await Shop.findById(booking.shopId);
-      if (shop && shop.currentQueue > 0) {
-        shop.currentQueue -= 1;
-        await shop.save();
-      }
+      // Atomic decrement shop queue
+      await Shop.findByIdAndUpdate(
+        booking.shopId,
+        { $inc: { currentQueue: -1 } },
+        { condition: { currentQueue: { $gt: 0 } } }
+      );
 
-      // Decrement staff queue if assigned
+      // Atomic decrement staff queue if assigned
       if (booking.staffId) {
-        const staff = await Staff.findById(booking.staffId);
-        if (staff && staff.currentQueue > 0) {
-          staff.currentQueue -= 1;
-          await staff.save();
-        }
+        await Staff.findByIdAndUpdate(
+          booking.staffId,
+          { $inc: { currentQueue: -1 } },
+          { condition: { currentQueue: { $gt: 0 } } }
+        );
       }
       
       await notifyQueuePositions(booking.shopId._id, booking.staffId);
@@ -297,19 +315,19 @@ const cancelBooking = async (req, res) => {
 
     // Update queue for barber
     if (booking.serviceType === 'barber') {
-      const shop = await Shop.findById(booking.shopId);
-      if (shop && shop.currentQueue > 0) {
-        shop.currentQueue -= 1;
-        await shop.save();
-      }
+      await Shop.findByIdAndUpdate(
+        booking.shopId,
+        { $inc: { currentQueue: -1 } },
+        { condition: { currentQueue: { $gt: 0 } } }
+      );
 
       // Decrement staff queue if assigned
       if (booking.staffId) {
-        const staff = await Staff.findById(booking.staffId);
-        if (staff && staff.currentQueue > 0) {
-          staff.currentQueue -= 1;
-          await staff.save();
-        }
+        await Staff.findByIdAndUpdate(
+          booking.staffId,
+          { $inc: { currentQueue: -1 } },
+          { condition: { currentQueue: { $gt: 0 } } }
+        );
       }
 
       await notifyQueuePositions(booking.shopId, booking.staffId);
@@ -418,18 +436,19 @@ const nextCustomer = async (req, res) => {
     await currentBooking.save();
 
     // 3. Update shop queue count
-    if (shop.currentQueue > 0) {
-      shop.currentQueue -= 1;
-      await shop.save();
-    }
+    await Shop.findByIdAndUpdate(
+      shop._id,
+      { $inc: { currentQueue: -1 } },
+      { condition: { currentQueue: { $gt: 0 } } }
+    );
 
     // Decrement staff queue if assigned
     if (currentBooking.staffId) {
-      const staff = await Staff.findById(currentBooking.staffId);
-      if (staff && staff.currentQueue > 0) {
-        staff.currentQueue -= 1;
-        await staff.save();
-      }
+      await Staff.findByIdAndUpdate(
+        currentBooking.staffId,
+        { $inc: { currentQueue: -1 } },
+        { condition: { currentQueue: { $gt: 0 } } }
+      );
     }
 
     // 4. Notify new queue positions
@@ -473,58 +492,83 @@ const getProviderStats = async (req, res) => {
     const shop = await Shop.findOne({ ownerId: req.user.id });
     if (!shop) return res.status(404).json({ message: 'Shop not found' });
 
-    const totalBookings = await Booking.countDocuments({ shopId: shop._id });
-    const completedBookings = await Booking.countDocuments({ shopId: shop._id, status: 'completed' });
+    const shopId = shop._id;
 
-    // Calculate Total Revenue
-    const bookings = await Booking.find({ shopId: shop._id, status: 'completed' });
-    let totalRevenue = 0;
-    bookings.forEach(b => {
-      if (b.serviceType === 'barber') totalRevenue += b.barberData.price || 0;
-      else if (['food', 'hardware'].includes(b.serviceType)) totalRevenue += b.orderData.totalAmount || 0;
-      else if (b.serviceType === 'electrician') totalRevenue += b.electricianData.visitCharge || 0;
-      else if (b.serviceType === 'plumber') totalRevenue += b.plumberData.estimatedCost || 0;
-    });
-
-    // Popular Services (Top 3) - Generic across categories
-    const popularServices = await Booking.aggregate([
-      { $match: { shopId: shop._id } },
-      {
-        $group: {
-          _id: {
-            $cond: [
-              { $eq: ['$serviceType', 'barber'] }, '$barberData.serviceName',
-              {
+    // Use Aggregation for all stats in parallel
+    const [stats, popularServices] = await Promise.all([
+      Booking.aggregate([
+        { $match: { shopId: shopId } },
+        {
+          $group: {
+            _id: null,
+            totalBookings: { $sum: 1 },
+            completedBookings: {
+              $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+            },
+            totalRevenue: {
+              $sum: {
                 $cond: [
-                  { $eq: ['$serviceType', 'electrician'] }, '$electricianData.issueType',
+                  { $eq: ['$status', 'completed'] },
                   {
-                    $cond: [
-                      { $eq: ['$serviceType', 'plumber'] }, '$plumberData.issueType',
-                      {
-                        $cond: [
-                          { $eq: ['$serviceType', 'mechanic'] }, '$mechanicData.problemType',
-                          'Other'
-                        ]
-                      }
+                    $add: [
+                      { $ifNull: ['$barberData.price', 0] },
+                      { $ifNull: ['$orderData.totalAmount', 0] },
+                      { $ifNull: ['$electricianData.visitCharge', 0] },
+                      { $ifNull: ['$plumberData.estimatedCost', 0] }
                     ]
-                  }
+                  },
+                  0
                 ]
               }
-            ]
-          },
-          count: { $sum: 1 }
+            }
+          }
         }
-      },
-      { $sort: { count: -1 } },
-      { $limit: 3 }
+      ]),
+      Booking.aggregate([
+        { $match: { shopId: shopId } },
+        {
+          $group: {
+            _id: {
+              $cond: [
+                { $eq: ['$serviceType', 'barber'] }, '$barberData.serviceName',
+                {
+                  $cond: [
+                    { $eq: ['$serviceType', 'electrician'] }, '$electricianData.issueType',
+                    {
+                      $cond: [
+                        { $eq: ['$serviceType', 'plumber'] }, '$plumberData.issueType',
+                        {
+                          $cond: [
+                            { $eq: ['$serviceType', 'mechanic'] }, '$mechanicData.problemType',
+                            'Other'
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { count: -1 } },
+        { $limit: 3 }
+      ])
     ]);
+
+    const finalStats = stats[0] || {
+      totalBookings: 0,
+      completedBookings: 0,
+      totalRevenue: 0
+    };
 
     res.status(200).json({
       success: true,
       stats: {
-        totalBookings,
-        completedBookings,
-        totalRevenue,
+        totalBookings: finalStats.totalBookings,
+        completedBookings: finalStats.completedBookings,
+        totalRevenue: finalStats.totalRevenue,
         popularServices
       }
     });

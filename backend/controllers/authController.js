@@ -433,27 +433,36 @@ const deleteUser = async (req, res) => {
     const Shop = require('../models/Shop');
     const Booking = require('../models/Booking');
     const Review = require('../models/Review');
+    const Staff = require('../models/Staff');
+    const Message = require('../models/Message');
 
     // 1. Delete all bookings made by this user
     await Booking.deleteMany({ userId });
 
-    // 2. Find all shops owned by this user
+    // 2. Delete all chat messages where user is sender or receiver
+    await Message.deleteMany({ $or: [{ senderId: userId }, { receiverId: userId }] });
+
+    // 3. Find all shops owned by this user
     const shops = await Shop.find({ ownerId: userId });
     const shopIds = shops.map(s => s._id);
 
     if (shopIds.length > 0) {
-      // 3. Delete all bookings associated with these shops
+      // 4. Delete all bookings associated with these shops
       await Booking.deleteMany({ shopId: { $in: shopIds } });
-      // 4. Delete all reviews associated with these shops
+      // 5. Delete all reviews associated with these shops
       await Review.deleteMany({ shopId: { $in: shopIds } });
-      // 5. Delete the shops
+      // 6. Delete all staff members associated with these shops
+      await Staff.deleteMany({ shopId: { $in: shopIds } });
+      // 7. Delete all chat messages associated with these shops
+      await Message.deleteMany({ shopId: { $in: shopIds } });
+      // 8. Delete the shops
       await Shop.deleteMany({ ownerId: userId });
     }
 
-    // 6. Delete all reviews made by this user
+    // 9. Delete all reviews made by this user
     await Review.deleteMany({ userId });
 
-    // 7. Finally delete the user
+    // 10. Finally delete the user
     await User.findByIdAndDelete(userId);
 
     res.status(200).json({ success: true, message: 'User and all associated data deleted successfully' });

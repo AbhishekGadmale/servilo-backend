@@ -5,7 +5,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true },
   password: { 
     type: String, 
-    required: function() { return !this.googleId; } // Only required if not Google login
+    required: function() { return !this.googleId && !!this.name; } // Required if not Google login and has completed profile
   },
   phone: { type: String }, // Optional for social login
   otp: { type: String },

@@ -1,6 +1,7 @@
+require('./setup');
 const request = require('supertest');
 const app = require('./testApp');
-require('./setup');
+const { signUpAndVerify } = require('./testUtils');
 
 describe('📅 Booking API Tests', () => {
 
@@ -8,24 +9,24 @@ describe('📅 Booking API Tests', () => {
   let shopId, bookingId;
 
   beforeEach(async () => {
-    // Create users
+    // Create users using helper
     const [c, p, a] = await Promise.all([
-      request(app).post('/api/auth/signup').send({
+      signUpAndVerify(app, {
         name: 'Customer', email: 'customer@test.com',
         phone: '9999999999', password: 'password123', role: 'customer'
       }),
-      request(app).post('/api/auth/signup').send({
+      signUpAndVerify(app, {
         name: 'Provider', email: 'provider@test.com',
         phone: '8888888888', password: 'password123', role: 'provider'
       }),
-      request(app).post('/api/auth/signup').send({
+      signUpAndVerify(app, {
         name: 'Admin', email: 'admin@test.com',
         phone: '7777777777', password: 'password123', role: 'admin'
       })
     ]);
-    customerToken = c.body.token;
-    providerToken = p.body.token;
-    adminToken = a.body.token;
+    customerToken = c.token;
+    providerToken = p.token;
+    adminToken = a.token;
 
     // Create and approve shop
     const shop = await request(app)
@@ -79,15 +80,15 @@ describe('📅 Booking API Tests', () => {
           barberData: { serviceName: 'Haircut', price: 100, duration: 30 }
         });
 
-      // Create second user
-      const user2 = await request(app).post('/api/auth/signup').send({
+      // Create second user using helper
+      const user2 = await signUpAndVerify(app, {
         name: 'Customer2', email: 'customer2@test.com',
         phone: '6666666666', password: 'password123', role: 'customer'
       });
 
       const res = await request(app)
         .post('/api/bookings/book')
-        .set('Authorization', `Bearer ${user2.body.token}`)
+        .set('Authorization', `Bearer ${user2.token}`)
         .send({
           shopId, serviceType: 'barber', bookingType: 'queue',
           barberData: { serviceName: 'Haircut', price: 100, duration: 30 }

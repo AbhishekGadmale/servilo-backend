@@ -3,6 +3,16 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 
 let mongoServer;
 
+// Mock Email Service
+global.OTP_MAP = {}; // Map to store OTPs by email for testing
+jest.mock('../utils/email', () => ({
+  sendOTPEmail: jest.fn((email, otp) => {
+    global.OTP_MAP[email] = otp; 
+    global.LAST_OTP = otp; // Keep for backward compatibility if needed
+    return Promise.resolve({ success: true });
+  })
+}));
+
 // Start in-memory MongoDB before all tests
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();

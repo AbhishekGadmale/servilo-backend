@@ -1,6 +1,7 @@
 const Message = require('../models/Message');
 const Booking = require('../models/Booking');
 const Shop = require('../models/Shop');
+const mongoose = require('mongoose');
 
 // @route   GET /api/chat/:id
 // @access  Private
@@ -120,52 +121,88 @@ const markMessagesAsRead = async (req, res) => {
 // @access  Private
 const getChatList = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = new mongoose.Types.ObjectId(req.user.id);
     const isProvider = req.user.role === 'provider';
 
-    // Find all messages involving the user
-    const messages = await Message.find({
-      $or: [{ senderId: userId }, { receiverId: userId }]
-    })
-    .sort({ createdAt: -1 })
-    .populate('shopId', 'shopName ownerId')
-    .populate('senderId', 'name profileImage')
-    .populate('receiverId', 'name profileImage');
+    const chats = await Message.aggregate([
+      {
+        $match: {
+          $or: [{ senderId: userId }, { receiverId: userId }]
+        }
+      },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: {
+            shop: '$shopId',
+            booking: { $ifNull: ['$bookingId', 'inquiry'] },
+            otherUser: {
+              $cond: [{ $eq: ['$senderId', userId] }, '$receiverId', '$senderId']
+            }
+          },
+          lastMessage: { $first: '$$ROOT' },
+          unreadCount: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ['$receiverId', userId] },
+                    { $eq: ['$isRead', false] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: 'shops',
+          localField: '_id.shop',
+          foreignField: '_id',
+          as: 'shopDetails'
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id.otherUser',
+          foreignField: '_id',
+          as: 'userDetails'
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          shopId: '$_id.shop',
+          shopName: { $arrayElemAt: ['$shopDetails.shopName', 0] },
+          bookingId: {
+            $cond: [{ $eq: ['$_id.booking', 'inquiry'] }, null, '$_id.booking']
+          },
+          lastMessage: 1,
+          unreadCount: 1,
+          customer: {
+            $cond: [
+              isProvider,
+              { $arrayElemAt: ['$userDetails', 0] },
+              null
+            ]
+          },
+          shopOwner: {
+            $cond: [
+              !isProvider,
+              { $arrayElemAt: ['$userDetails', 0] },
+              null
+            ]
+          }
+        }
+      },
+      { $sort: { 'lastMessage.createdAt': -1 } }
+    ]);
 
-    // Group by unique conversation (Shop + optional Booking)
-    const chatGroups = {};
-
-    for (const msg of messages) {
-      // Key for grouping: shopId + bookingId (if exists) + other userId
-      const otherUserId = msg.senderId._id.toString() === userId 
-        ? msg.receiverId._id.toString() 
-        : msg.senderId._id.toString();
-      
-      const key = `${msg.shopId?._id || 'none'}_${msg.bookingId || 'inquiry'}_${otherUserId}`;
-
-      if (!chatGroups[key]) {
-        chatGroups[key] = {
-          shopId: msg.shopId?._id,
-          shopName: msg.shopId?.shopName,
-          bookingId: msg.bookingId,
-          lastMessage: msg,
-          unreadCount: 0,
-          customer: isProvider ? (msg.senderId._id.toString() === userId ? msg.receiverId : msg.senderId) : null,
-          shopOwner: !isProvider ? (msg.senderId._id.toString() === userId ? msg.receiverId : msg.senderId) : null
-        };
-      }
-
-      if (!msg.isRead && msg.receiverId._id.toString() === userId) {
-        chatGroups[key].unreadCount++;
-      }
-    }
-
-    res.status(200).json({ 
-      success: true, 
-      chats: Object.values(chatGroups).sort((a, b) => 
-        b.lastMessage.createdAt - a.lastMessage.createdAt
-      ) 
-    });
+    res.status(200).json({ success: true, chats });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

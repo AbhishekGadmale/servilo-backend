@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('./testApp');
+const { signUpAndVerify } = require('./testUtils');
 const Shop = require('../models/Shop');
 require('./setup');
 
@@ -11,22 +12,22 @@ describe('🛡️ Booking Queue Fix Verification', () => {
   beforeEach(async () => {
     // Create users
     const [c, p, a] = await Promise.all([
-      request(app).post('/api/auth/signup').send({
+      signUpAndVerify(app, {
         name: 'Customer', email: 'customer@test.com',
         phone: '9999999999', password: 'password123', role: 'customer'
       }),
-      request(app).post('/api/auth/signup').send({
+      signUpAndVerify(app, {
         name: 'Provider', email: 'provider@test.com',
         phone: '8888888888', password: 'password123', role: 'provider'
       }),
-      request(app).post('/api/auth/signup').send({
+      signUpAndVerify(app, {
         name: 'Admin', email: 'admin@test.com',
         phone: '7777777777', password: 'password123', role: 'admin'
       })
     ]);
-    customerToken = c.body.token;
-    providerToken = p.body.token;
-    adminToken = a.body.token;
+    customerToken = c.token;
+    providerToken = p.token;
+    adminToken = a.token;
 
     // Create and approve shop
     const shopRes = await request(app)
@@ -68,7 +69,12 @@ describe('🛡️ Booking Queue Fix Verification', () => {
     let shop = await Shop.findById(shopId);
     expect(shop.currentQueue).toBe(1);
 
-    // 2. Transition to 'completed' (terminal state)
+    // 2. Transition to 'confirmed' then 'completed' (terminal state)
+    await request(app)
+      .put(`/api/bookings/${bookingId}/status`)
+      .set('Authorization', `Bearer ${providerToken}`)
+      .send({ status: 'confirmed' });
+
     await request(app)
       .put(`/api/bookings/${bookingId}/status`)
       .set('Authorization', `Bearer ${providerToken}`)
@@ -78,12 +84,13 @@ describe('🛡️ Booking Queue Fix Verification', () => {
     shop = await Shop.findById(shopId);
     expect(shop.currentQueue).toBe(0);
 
-    // 3. Transition to 'rejected' (another terminal state)
-    // BEFORE FIX: This would decrement queue to -1
-    await request(app)
+    // 3. Transition to 'rejected' (another terminal state) - this should fail now because it's already completed
+    const rejectRes = await request(app)
       .put(`/api/bookings/${bookingId}/status`)
       .set('Authorization', `Bearer ${providerToken}`)
       .send({ status: 'rejected' });
+
+    expect(rejectRes.status).toBe(400);
 
     // Verify queue is STILL 0
     shop = await Shop.findById(shopId);
@@ -104,7 +111,12 @@ describe('🛡️ Booking Queue Fix Verification', () => {
     
     const bookingId = bookingRes.body.booking._id;
 
-    // 2. Transition to 'completed'
+    // 2. Transition to 'confirmed' then 'completed'
+    await request(app)
+      .put(`/api/bookings/${bookingId}/status`)
+      .set('Authorization', `Bearer ${providerToken}`)
+      .send({ status: 'confirmed' });
+
     await request(app)
       .put(`/api/bookings/${bookingId}/status`)
       .set('Authorization', `Bearer ${providerToken}`)

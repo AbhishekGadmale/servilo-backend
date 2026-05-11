@@ -100,4 +100,9 @@ const bookingSchema = new mongoose.Schema({
   bookingDate: { type: Date, default: Date.now }
 });
 
+// Indexes for performance
+bookingSchema.index({ shopId: 1, status: 1 });
+bookingSchema.index({ userId: 1, status: 1 });
+bookingSchema.index({ shopId: 1, bookingDate: -1 });
+
 module.exports = mongoose.model('Booking', bookingSchema);

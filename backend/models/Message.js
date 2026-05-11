@@ -53,4 +53,10 @@ const messageSchema = new mongoose.Schema({
   }
 });
 
+// Indexes for chat list and history performance
+messageSchema.index({ senderId: 1, receiverId: 1, createdAt: -1 });
+messageSchema.index({ receiverId: 1, isRead: 1 });
+messageSchema.index({ bookingId: 1, createdAt: -1 });
+messageSchema.index({ shopId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Message', messageSchema);
