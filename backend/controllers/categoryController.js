@@ -1,10 +1,23 @@
 const Category = require('../models/Category');
 
+const { getCache, setCache, clearCache } = require('../utils/cacheHelper');
+
 // @route   GET /api/categories
 // @access  Public
 const getCategories = async (req, res) => {
   try {
-    const categories = await Category.find({ isActive: true }).sort({ name: 1 });
+    const cacheKey = 'categories:all:active';
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+      return res.status(200).json({ success: true, count: cachedData.length, categories: cachedData });
+    }
+
+    const categories = await Category.find({ isActive: true }).sort({ name: 1 }).lean();
+    
+    // Cache for 24 hours (86400 seconds) since categories rarely change
+    await setCache(cacheKey, categories, 86400);
+
     res.status(200).json({ success: true, count: categories.length, categories });
   } catch (error) {
     console.error('Error in getCategories:', error);
@@ -36,6 +49,9 @@ const createCategory = async (req, res) => {
     
     console.log('Step 6: Attempting to create category in DB...');
     const category = await Category.create({ name: name.trim(), slug, icon, description });
+    
+    // Invalidate cache
+    await clearCache('categories:*');
     
     console.log('Step 7: Category created successfully:', category._id);
     res.status(201).json({ success: true, category });
@@ -76,6 +92,9 @@ const updateCategory = async (req, res) => {
       return res.status(404).json({ message: 'Category not found' });
     }
 
+    // Invalidate cache
+    await clearCache('categories:*');
+
     res.status(200).json({ success: true, category });
   } catch (error) {
     console.error('Error in updateCategory:', error);
@@ -93,6 +112,10 @@ const deleteCategory = async (req, res) => {
     }
 
     await category.deleteOne();
+    
+    // Invalidate cache
+    await clearCache('categories:*');
+    
     res.status(200).json({ success: true, message: 'Category removed' });
   } catch (error) {
     console.error('Error in deleteCategory:', error);

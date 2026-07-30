@@ -3,13 +3,21 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { sendOTPEmail } = require('../utils/email');
 const { OAuth2Client } = require('google-auth-library');
+const crypto = require('crypto');
 
 const client = new OAuth2Client(process.env.GOOGLE_WEB_CLIENT_ID);
 
-// Generate JWT Token
+// Generate JWT Token (Access Token)
 const generateToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, {
-    expiresIn: '30d'
+    expiresIn: '15m' // Short lived access token
+  });
+};
+
+// Generate Refresh Token
+const generateRefreshToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, {
+    expiresIn: '30d' // Long lived refresh token
   });
 };
 
@@ -30,8 +38,8 @@ const sendOTP = async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate 6-digit OTP securely
+    const otp = crypto.randomInt(100000, 1000000).toString();
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Find user or create temporary one
@@ -91,16 +99,21 @@ const verifyOTP = async (req, res) => {
       return res.status(401).json({ message: 'Invalid OTP' });
     }
 
-    // Clear OTP fields and verify email
+    const token = generateToken(user._id, user.role);
+    const refreshToken = generateRefreshToken(user._id);
+
+    // Clear OTP fields, verify email, and save refresh token
     user.otp = undefined;
     user.otpExpires = undefined;
     user.isEmailVerified = true;
+    user.refreshToken = refreshToken;
     await user.save();
 
     res.status(200).json({
       success: true,
       message: 'Login successful!',
-      token: generateToken(user._id, user.role),
+      token,
+      refreshToken,
       user: {
         id: user._id,
         name: user.name,
@@ -155,10 +168,17 @@ const googleLogin = async (req, res) => {
       await user.save();
     }
 
+    const token = generateToken(user._id, user.role);
+    const refreshToken = generateRefreshToken(user._id);
+    
+    user.refreshToken = refreshToken;
+    await user.save();
+
     res.status(200).json({
       success: true,
       message: 'Login successful!',
-      token: generateToken(user._id, user.role),
+      token,
+      refreshToken,
       user: {
         id: user._id,
         name: user.name,
@@ -237,8 +257,8 @@ const signup = async (req, res) => {
 
     if (!user) throw lastError || new Error('Failed to create user after multiple attempts');
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate 6-digit OTP securely
+    const otp = crypto.randomInt(100000, 1000000).toString();
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Hash OTP for security
@@ -299,7 +319,7 @@ const login = async (req, res) => {
     // Check if email is verified
     if (!user.isEmailVerified) {
       // Send a new OTP
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otp = crypto.randomInt(100000, 1000000).toString();
       const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
       const salt = await bcrypt.genSalt(10);
       user.otp = await bcrypt.hash(otp, salt);
@@ -326,11 +346,18 @@ const login = async (req, res) => {
       });
     }
 
+    // Generate Tokens
+    const token = generateToken(user._id, user.role);
+    const refreshToken = generateRefreshToken(user._id);
+    user.refreshToken = refreshToken;
+    await user.save();
+
     // Return token
     res.status(200).json({
       success: true,
       message: 'Login successful!',
-      token: generateToken(user._id, user.role),
+      token,
+      refreshToken,
       user: {
         id: user._id,
         name: user.name,
@@ -514,6 +541,32 @@ const getReferralStats = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+// @route   POST /api/auth/refresh-token
+// @access  Public
+const refreshTokenHandler = async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(401).json({ message: 'Refresh Token required' });
+
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id);
+
+    if (!user || user.refreshToken !== refreshToken) {
+      return res.status(403).json({ message: 'Invalid refresh token' });
+    }
+
+    const newAccessToken = generateToken(user._id, user.role);
+    const newRefreshToken = generateRefreshToken(user._id);
+
+    user.refreshToken = newRefreshToken;
+    await user.save();
+
+    res.json({ token: newAccessToken, refreshToken: newRefreshToken });
+  } catch (err) {
+    return res.status(403).json({ message: 'Invalid or expired refresh token' });
+  }
+};
+
 module.exports = { 
   signup, 
   login, 
@@ -526,5 +579,6 @@ module.exports = {
   getAllUsers, 
   deleteUser, 
   toggleUserSuspension, 
-  getReferralStats 
+  getReferralStats,
+  refreshToken: refreshTokenHandler
 };

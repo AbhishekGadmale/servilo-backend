@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
 const getChatHistory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { type, page = 1, limit = 20 } = req.query;
+    const { type, cursor, limit = 20 } = req.query;
 
     let messages;
     let isAuthorized = false;
@@ -43,26 +43,25 @@ const getChatHistory = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to view this chat' });
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+    if (cursor) {
+      query._id = { $lt: cursor };
+    }
+
     messages = await Message.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
+      .populate('senderId', 'name profileImage')
+      .sort({ _id: -1 })
+      .limit(parseInt(limit))
+      .lean();
 
-    const total = await Message.countDocuments(query);
-
-    // Populate sender details for all messages
-    const populatedMessages = await Message.populate(messages, {
-      path: 'senderId',
-      select: 'name profileImage'
-    });
+    const hasMore = messages.length === parseInt(limit);
+    const nextCursor = hasMore ? messages[messages.length - 1]._id : null;
 
     // Return newest first for the client (better for inverted FlatList)
     res.status(200).json({ 
       success: true, 
-      messages: populatedMessages,
-      hasMore: total > skip + messages.length
+      messages,
+      hasMore,
+      nextCursor
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });

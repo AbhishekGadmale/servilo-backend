@@ -11,6 +11,7 @@ const userSchema = new mongoose.Schema({
   otp: { type: String },
   otpExpires: { type: Date },
   googleId: { type: String, unique: true, sparse: true },
+  refreshToken: { type: String },
   isEmailVerified: { type: Boolean, default: false },
   isSuspended: { type: Boolean, default: false },
   role: {

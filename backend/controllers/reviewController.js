@@ -68,6 +68,10 @@ const addReview = async (req, res) => {
         );
       }
     }
+    const { clearCache } = require('../utils/cacheHelper');
+    await clearCache(`shop:reviews:${shopId}`);
+    await clearCache(`shop:details:${shopId}`);
+    await clearCache('shops:*');
 
     res.status(201).json({ success: true, message: 'Review added!', review });
 
@@ -80,11 +84,33 @@ const addReview = async (req, res) => {
 // @access Public
 const getShopReviews = async (req, res) => {
   try {
-    const reviews = await Review.find({ shopId: req.params.shopId })
-      .populate('userId', 'name')
-      .sort({ createdAt: -1 });
+    const { cursor, limit = 10 } = req.query;
+    const cacheKey = `shop:reviews:${req.params.shopId}:cursor=${cursor || 'start'}:limit=${limit}`;
+    const { getCache, setCache } = require('../utils/cacheHelper');
+    const cachedReviews = await getCache(cacheKey);
 
-    res.status(200).json({ success: true, count: reviews.length, reviews });
+    if (cachedReviews) {
+      return res.status(200).json(cachedReviews);
+    }
+
+    let query = { shopId: req.params.shopId };
+    if (cursor) {
+      query._id = { $lt: cursor };
+    }
+
+    const reviews = await Review.find(query)
+      .populate('userId', 'name')
+      .sort({ _id: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    const hasMore = reviews.length === parseInt(limit);
+    const nextCursor = hasMore ? reviews[reviews.length - 1]._id : null;
+
+    const response = { success: true, count: reviews.length, reviews, hasMore, nextCursor };
+    await setCache(cacheKey, response, 1800); // Cache for 30 minutes
+
+    res.status(200).json(response);
 
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -103,6 +129,11 @@ const deleteReview = async (req, res) => {
 
     // Recalculate rating
     await recalculateShopRating(shopId);
+
+    const { clearCache } = require('../utils/cacheHelper');
+    await clearCache(`shop:reviews:${shopId}`);
+    await clearCache(`shop:details:${shopId}`);
+    await clearCache('shops:*');
 
     res.status(200).json({ success: true, message: 'Review deleted' });
   } catch (error) {

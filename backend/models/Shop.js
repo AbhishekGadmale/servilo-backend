@@ -52,9 +52,7 @@ const shopSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-shopSchema.index({ location: '2dsphere' });
-shopSchema.index({ category: 1 });
-shopSchema.index({ isApproved: 1 });
+shopSchema.index({ category: 1, isApproved: 1, location: '2dsphere' });
 shopSchema.index({ shopName: 'text', description: 'text' });
 
 module.exports = mongoose.model('Shop', shopSchema);

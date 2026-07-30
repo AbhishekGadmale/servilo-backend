@@ -5,7 +5,8 @@ const {
   signup, login, sendOTP, verifyOTP, googleLogin, getProfile,
   getAdminStats, updateProfile,
   getAllUsers, deleteUser,
-  toggleUserSuspension, getReferralStats
+  toggleUserSuspension, getReferralStats,
+  refreshToken
 } = require('../controllers/authController');
 const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 
@@ -70,6 +71,9 @@ router.post('/login',
   handleValidation,
   login
 );
+
+// ── POST /api/auth/refresh-token ────────────────────────
+router.post('/refresh-token', refreshToken);
 
 router.post('/google', googleLogin);
 

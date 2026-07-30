@@ -62,6 +62,7 @@ const io = require('socket.io')(server, {
     credentials: true
   }
 });
+app.set('io', io);
 const Message = require('./models/Message');
 const User = require('./models/User');
 
@@ -77,6 +78,7 @@ io.on('connection', (socket) => {
       onlineUsers.set(userId, new Set());
     }
     onlineUsers.get(userId).add(socket.id);
+    socket.join(`user_${userId}`);
     io.emit('user_status_change', { userId, status: 'online' });
   });
 
@@ -90,6 +92,18 @@ io.on('connection', (socket) => {
   socket.on('join_room', (bookingId) => {
     socket.join(bookingId);
     console.log(`👤 User ${socket.id} joined room: ${bookingId}`);
+  });
+
+  socket.on('join_shop_room', (shopId) => {
+    const room = `shop_${shopId}`;
+    socket.join(room);
+    console.log(`🏬 User ${socket.id} joined shop room: ${room}`);
+  });
+  
+  socket.on('leave_shop_room', (shopId) => {
+    const room = `shop_${shopId}`;
+    socket.leave(room);
+    console.log(`🚪 User ${socket.id} left shop room: ${room}`);
   });
 
   socket.on('typing', (data) => {
@@ -252,6 +266,18 @@ if (process.env.NODE_ENV !== 'production') {
 // ─────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));  // limit payload size
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// ─────────────────────────────────────────────────────────
+// 4.5. SECURITY (Data Sanitization)
+// ─────────────────────────────────────────────────────────
+const mongoSanitize = require('express-mongo-sanitize');
+const xss = require('xss-clean');
+
+// Data sanitization against NoSQL query injection
+app.use(mongoSanitize());
+
+// Data sanitization against XSS
+app.use(xss());
 
 // ─────────────────────────────────────────────────────────
 // 5. RATE LIMITERS

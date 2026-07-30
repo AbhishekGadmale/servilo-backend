@@ -1,5 +1,7 @@
 const Shop = require('../models/Shop');
 
+const { getCache, setCache } = require('../utils/cacheHelper');
+
 // Helper: determine item array key based on category
 const getItemKey = (category) => {
   return category === 'food' ? 'menuItems' : 'services';
@@ -9,16 +11,27 @@ const getItemKey = (category) => {
 // @access Public
 const getItems = async (req, res) => {
   try {
-    const shop = await Shop.findById(req.params.id);
+    const cacheKey = `shop:items:${req.params.id}`;
+    const cachedItems = await getCache(cacheKey);
+
+    if (cachedItems) {
+      return res.status(200).json(cachedItems);
+    }
+
+    const shop = await Shop.findById(req.params.id).lean();
     if (!shop) return res.status(404).json({ message: 'Shop not found' });
 
     const itemKey = getItemKey(shop.category);
-    res.status(200).json({
+    const responseData = {
       success: true,
       category: shop.category,
       itemKey,
       items: shop[itemKey]
-    });
+    };
+
+    await setCache(cacheKey, responseData, 3600); // Cache for 1 hour
+
+    res.status(200).json(responseData);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -43,6 +56,10 @@ const addItem = async (req, res) => {
     await shop.save();
 
     const addedItem = shop[itemKey][shop[itemKey].length - 1];
+
+    const { clearCache } = require('../utils/cacheHelper');
+    await clearCache(`shop:items:${req.params.id}`);
+    await clearCache(`shop:details:${req.params.id}`);
 
     res.status(201).json({
       success: true,
@@ -85,6 +102,10 @@ const updateItem = async (req, res) => {
 
     await shop.save();
 
+    const { clearCache } = require('../utils/cacheHelper');
+    await clearCache(`shop:items:${req.params.id}`);
+    await clearCache(`shop:details:${req.params.id}`);
+
     res.status(200).json({
       success: true,
       message: 'Item updated!',
@@ -112,6 +133,10 @@ const deleteItem = async (req, res) => {
     );
 
     await shop.save();
+
+    const { clearCache } = require('../utils/cacheHelper');
+    await clearCache(`shop:items:${req.params.id}`);
+    await clearCache(`shop:details:${req.params.id}`);
 
     res.status(200).json({ success: true, message: 'Item deleted!' });
   } catch (error) {

@@ -104,5 +104,6 @@ const bookingSchema = new mongoose.Schema({
 bookingSchema.index({ shopId: 1, status: 1 });
 bookingSchema.index({ userId: 1, status: 1 });
 bookingSchema.index({ shopId: 1, bookingDate: -1 });
+bookingSchema.index({ shopId: 1, serviceType: 1, status: 1, staffId: 1, 'barberData.queueNumber': 1 }); // Optimizes finding the next pending booking
 
 module.exports = mongoose.model('Booking', bookingSchema);

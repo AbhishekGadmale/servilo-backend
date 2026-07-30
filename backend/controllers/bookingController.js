@@ -164,6 +164,19 @@ const createBooking = async (req, res) => {
       notifMessages[serviceType] || 'New booking received',
       { screen: 'Queue', bookingId: booking._id, type: 'booking' });
 
+    // Emit socket event to update queues and providers in real-time
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`shop_${shopId}`).emit('booking_created', { bookingId: booking._id });
+      if (serviceType === 'barber') {
+        io.to(`shop_${shopId}`).emit('queue_updated', { shopId });
+      }
+    }
+
+    const { clearCache } = require('../utils/cacheHelper');
+    await clearCache(`shop:details:${shopId}`);
+    await clearCache('shops:*');
+
     res.status(201).json({ success: true, message: 'Booking created!', booking });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -173,10 +186,23 @@ const createBooking = async (req, res) => {
 // ─── Get My Bookings ─────────────────────────────────────
 const getMyBookings = async (req, res) => {
   try {
-    const bookings = await Booking.find({ userId: req.user.id })
+    const { cursor, limit = 10 } = req.query;
+    let query = { userId: req.user.id };
+    
+    if (cursor) {
+      query._id = { $lt: cursor };
+    }
+
+    const bookings = await Booking.find(query)
       .populate('shopId', 'shopName address category phone photos ownerId')
-      .sort({ bookingDate: -1 });
-    res.status(200).json({ success: true, count: bookings.length, bookings });
+      .sort({ _id: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    const hasMore = bookings.length === parseInt(limit);
+    const nextCursor = hasMore ? bookings[bookings.length - 1]._id : null;
+
+    res.status(200).json({ success: true, count: bookings.length, bookings, hasMore, nextCursor });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -188,11 +214,23 @@ const getShopBookings = async (req, res) => {
     const shop = await Shop.findOne({ ownerId: req.user.id });
     if (!shop) return res.status(404).json({ message: 'Shop not found' });
 
-    const bookings = await Booking.find({ shopId: shop._id })
-      .populate('userId', 'name phone profileImage')
-      .sort({ bookingDate: -1 });
+    const { cursor, limit = 15 } = req.query;
+    let query = { shopId: shop._id };
+    
+    if (cursor) {
+      query._id = { $lt: cursor };
+    }
 
-    res.status(200).json({ success: true, count: bookings.length, bookings });
+    const bookings = await Booking.find(query)
+      .populate('userId', 'name phone profileImage')
+      .sort({ _id: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    const hasMore = bookings.length === parseInt(limit);
+    const nextCursor = hasMore ? bookings[bookings.length - 1]._id : null;
+
+    res.status(200).json({ success: true, count: bookings.length, bookings, hasMore, nextCursor });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -276,6 +314,25 @@ const updateBookingStatus = async (req, res) => {
       }
       
       await notifyQueuePositions(booking.shopId._id, booking.staffId);
+      
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`shop_${booking.shopId._id}`).emit('queue_updated', { shopId: booking.shopId._id });
+      }
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      const payload = { bookingId: booking._id, status: booking.status };
+      io.to(`shop_${booking.shopId._id}`).emit('booking_updated', payload);
+      const customerUserId = booking.userId?._id || booking.userId;
+      io.to(`user_${customerUserId}`).emit('booking_updated', payload);
+    }
+
+    if (booking.serviceType === 'barber' && terminalStates.includes(status) && !terminalStates.includes(previousStatus)) {
+        const { clearCache } = require('../utils/cacheHelper');
+        await clearCache(`shop:details:${booking.shopId._id}`);
+        await clearCache('shops:*');
     }
 
     res.status(200).json({ success: true, booking });
@@ -313,15 +370,13 @@ const cancelBooking = async (req, res) => {
       );
     }
 
-    // Update queue for barber
+    // Queue notifications for barber
     if (booking.serviceType === 'barber') {
       await Shop.findByIdAndUpdate(
         booking.shopId,
         { $inc: { currentQueue: -1 } },
         { condition: { currentQueue: { $gt: 0 } } }
       );
-
-      // Decrement staff queue if assigned
       if (booking.staffId) {
         await Staff.findByIdAndUpdate(
           booking.staffId,
@@ -329,8 +384,25 @@ const cancelBooking = async (req, res) => {
           { condition: { currentQueue: { $gt: 0 } } }
         );
       }
-
       await notifyQueuePositions(booking.shopId, booking.staffId);
+      
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`shop_${booking.shopId}`).emit('queue_updated', { shopId: booking.shopId });
+      }
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`shop_${booking.shopId}`).emit('booking_cancelled', booking._id);
+      const customerUserId = booking.userId?._id || booking.userId;
+      io.to(`user_${customerUserId}`).emit('booking_updated', { bookingId: booking._id, status: booking.status });
+    }
+
+    if (booking.serviceType === 'barber') {
+        const { clearCache } = require('../utils/cacheHelper');
+        await clearCache(`shop:details:${booking.shopId}`);
+        await clearCache('shops:*');
     }
 
     res.status(200).json({ success: true, message: 'Booking cancelled' });
@@ -474,6 +546,10 @@ const nextCustomer = async (req, res) => {
         type: 'booking'
       });
     }
+
+    const { clearCache } = require('../utils/cacheHelper');
+    await clearCache(`shop:details:${shop._id}`);
+    await clearCache('shops:*');
 
     res.status(200).json({
       success: true,

@@ -38,6 +38,9 @@ const createShop = async (req, res) => {
       }
     });
 
+    // Invalidate shops cache
+    await clearCache('shops:*');
+
     res.status(201).json({
       success: true,
       message: 'Shop created! Waiting for admin approval.',
@@ -75,6 +78,8 @@ const getDistanceKm = (lat1, lng1, lat2, lng2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+const { getCache, setCache } = require('../utils/cache');
+
 // @route  GET /api/shops
 // @access Public
 const getAllShops = async (req, res) => {
@@ -92,15 +97,35 @@ const getAllShops = async (req, res) => {
       query.$text = { $search: search };
     }
 
+    // --- Redis Caching Logic ---
+    let cacheKey = `shops:list:page=${page}:limit=${limit}:cat=${category || 'all'}:search=${search || 'none'}`;
+    let dynamicRadius = radius ? parseInt(radius) : (SERVICE_RADIUS[category] || SERVICE_RADIUS.default);
+
+    if (lat && lng) {
+      // Round lat/lng to 2 decimal places (~1.1km clustering) for cache hits
+      cacheKey += `:lat=${parseFloat(lat).toFixed(2)}:lng=${parseFloat(lng).toFixed(2)}:rad=${dynamicRadius}`;
+    }
+
+    const cachedResponse = await getCache(cacheKey);
+    if (cachedResponse) {
+      // Attach precise distance for cached location queries dynamically
+      if (lat && lng) {
+        cachedResponse.shops = cachedResponse.shops.map(shop => {
+          const coords = shop.location?.coordinates;
+          if (coords) {
+            shop.distanceKm = Math.round(getDistanceKm(parseFloat(lat), parseFloat(lng), coords[1], coords[0]) * 10) / 10;
+          }
+          return shop;
+        });
+      }
+      return res.status(200).json(cachedResponse);
+    }
+    // ---------------------------
+
     let shops;
     let total;
 
     if (lat && lng) {
-      // Use custom radius if provided, else use service-type default
-      const dynamicRadius = radius
-        ? parseInt(radius)
-        : SERVICE_RADIUS[category] || SERVICE_RADIUS.default;
-
       // Note: $near logic with limit/skip
       shops = await Shop.find({
         ...query,
@@ -114,9 +139,11 @@ const getAllShops = async (req, res) => {
           }
         }
       })
+      .select('shopName category isOpen photos rating currentQueue location isApproved')
       .populate('ownerId', 'name phone')
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean();
 
       // Get total count for pagination (using $geoWithin because $near is not supported in countDocuments)
       total = await Shop.countDocuments({
@@ -133,17 +160,16 @@ const getAllShops = async (req, res) => {
 
       // Attach distance in km to each shop
       shops = shops.map(shop => {
-        const shopObj = shop.toObject();
         const coords = shop.location?.coordinates;
         if (coords) {
           const distanceKm = getDistanceKm(
             parseFloat(lat), parseFloat(lng),
             coords[1], coords[0]
           );
-          shopObj.distanceKm = Math.round(distanceKm * 10) / 10;
+          shop.distanceKm = Math.round(distanceKm * 10) / 10;
         }
-        shopObj.searchRadiusKm = Math.round(dynamicRadius / 1000);
-        return shopObj;
+        shop.searchRadiusKm = Math.round(dynamicRadius / 1000);
+        return shop;
       });
 
     } else {
@@ -152,10 +178,11 @@ const getAllShops = async (req, res) => {
         .populate('ownerId', 'name phone')
         .sort({ rating: -1, createdAt: -1 })
         .skip(skip)
-        .limit(limit);
+        .limit(limit)
+        .lean();
     }
 
-    res.status(200).json({
+    const responseData = {
       success: true,
       count: shops.length,
       pagination: {
@@ -165,7 +192,12 @@ const getAllShops = async (req, res) => {
         totalShops: total
       },
       shops
-    });
+    };
+
+    // Cache for 10 minutes (600 seconds) - shops can update their queues often
+    await setCache(cacheKey, responseData, 600);
+
+    res.status(200).json(responseData);
 
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -176,12 +208,23 @@ const getAllShops = async (req, res) => {
 // @access Public
 const getShopById = async (req, res) => {
   try {
+    const cacheKey = `shop:details:${req.params.id}`;
+    const cachedShop = await getCache(cacheKey);
+
+    if (cachedShop) {
+      return res.status(200).json({ success: true, shop: cachedShop });
+    }
+
     const shop = await Shop.findById(req.params.id)
-      .populate('ownerId', 'name phone email');
+      .populate('ownerId', 'name phone email')
+      .lean();
 
     if (!shop) {
       return res.status(404).json({ message: 'Shop not found' });
     }
+
+    // Cache for 30 minutes
+    await setCache(cacheKey, shop, 1800);
 
     res.status(200).json({ success: true, shop });
 
@@ -237,6 +280,10 @@ const updateShop = async (req, res) => {
       { returnDocument: 'after', runValidators: true }
     );
 
+    // Invalidate caches
+    await clearCache(`shop:details:${req.params.id}`);
+    await clearCache('shops:*');
+
     res.status(200).json({ success: true, shop: updatedShop });
 
   } catch (error) {
@@ -260,6 +307,10 @@ const toggleShopStatus = async (req, res) => {
 
     shop.isOpen = !shop.isOpen;
     await shop.save();
+
+    // Invalidate caches
+    await clearCache(`shop:details:${req.params.id}`);
+    await clearCache('shops:*');
 
     res.status(200).json({
       success: true,
@@ -307,14 +358,17 @@ const { notifyProvider } = require('../utils/notifications');
 // @access Private (admin only)
 const approveShop = async (req, res) => {
   try {
-    const shop = await Shop.findByIdAndUpdate(
-      req.params.id,
-      { isApproved: true },
-      { new: true }
-    );
+    const shop = await Shop.findById(req.params.id);
     if (!shop) {
       return res.status(404).json({ message: 'Shop not found' });
     }
+
+    shop.isApproved = true;
+    await shop.save();
+
+    // Invalidate caches
+    await clearCache(`shop:details:${req.params.id}`);
+    await clearCache('shops:*');
 
     // Notify provider
     await notifyProvider(
@@ -324,7 +378,7 @@ const approveShop = async (req, res) => {
       { screen: 'Dashboard', type: 'approval' }
     );
 
-    res.status(200).json({ success: true, message: 'Shop approved!', shop });
+    res.status(200).json({ success: true, message: 'Shop approved successfully', shop });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -334,8 +388,17 @@ const approveShop = async (req, res) => {
 // @access Private (admin only)
 const deleteShop = async (req, res) => {
   try {
-    await Shop.findByIdAndDelete(req.params.id);
-    res.status(200).json({ success: true, message: 'Shop deleted' });
+    const shop = await Shop.findById(req.params.id);
+    if (!shop) {
+        return res.status(404).json({ message: 'Shop not found' });
+    }
+    await shop.deleteOne();
+
+    // Invalidate caches
+    await clearCache(`shop:details:${req.params.id}`);
+    await clearCache('shops:*');
+
+    res.status(200).json({ success: true, message: 'Shop removed' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

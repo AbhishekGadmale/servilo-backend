@@ -1,11 +1,22 @@
 const Staff = require('../models/Staff');
 const Shop = require('../models/Shop');
 
+const { getCache, setCache, clearCache } = require('../utils/cacheHelper');
+
 // @route   GET /api/staff/:shopId
 // @access  Public
 const getShopStaff = async (req, res) => {
   try {
-    const staff = await Staff.find({ shopId: req.params.shopId, isAvailable: true });
+    const cacheKey = `shop:staff:${req.params.shopId}`;
+    const cachedStaff = await getCache(cacheKey);
+    if (cachedStaff) {
+      return res.status(200).json({ success: true, count: cachedStaff.length, staff: cachedStaff });
+    }
+
+    const staff = await Staff.find({ shopId: req.params.shopId, isAvailable: true }).lean();
+    
+    await setCache(cacheKey, staff, 1800); // Cache for 30 minutes
+    
     res.status(200).json({ success: true, count: staff.length, staff });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -30,6 +41,8 @@ const addStaff = async (req, res) => {
       specialization,
       photo
     });
+
+    await clearCache(`shop:staff:${shop._id}`);
 
     res.status(201).json({ success: true, member });
   } catch (error) {
@@ -58,6 +71,8 @@ const updateStaff = async (req, res) => {
       { new: true, runValidators: true }
     );
 
+    await clearCache(`shop:staff:${shop._id}`);
+
     res.status(200).json({ success: true, member: updatedMember });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -77,6 +92,7 @@ const deleteStaff = async (req, res) => {
     }
 
     await member.deleteOne();
+    await clearCache(`shop:staff:${shop._id}`);
     res.status(200).json({ success: true, message: 'Staff member removed' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
