@@ -78,7 +78,7 @@ const getDistanceKm = (lat1, lng1, lat2, lng2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-const { getCache, setCache } = require('../utils/cache');
+const { getCache, setCache, clearCache } = require('../utils/cacheHelper');
 
 // @route  GET /api/shops
 // @access Public
