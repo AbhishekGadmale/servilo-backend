@@ -284,8 +284,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Data sanitization against XSS
-app.use(xss());
+// app.use(xss());
 
 // ─────────────────────────────────────────────────────────
 // 5. RATE LIMITERS
