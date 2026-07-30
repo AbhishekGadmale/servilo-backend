@@ -274,7 +274,15 @@ const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
 
 // Data sanitization against NoSQL query injection
-app.use(mongoSanitize());
+// Custom wrapper for express-mongo-sanitize to avoid Express 5 getter errors
+app.use((req, res, next) => {
+  ['body', 'params', 'headers', 'query'].forEach((key) => {
+    if (req[key]) {
+      mongoSanitize.sanitize(req[key]);
+    }
+  });
+  next();
+});
 
 // Data sanitization against XSS
 app.use(xss());
