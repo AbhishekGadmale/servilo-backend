@@ -33,7 +33,7 @@ const generateReferralCode = () => {
 
 // @route   POST /api/auth/send-otp
 // @access  Public
-const sendOTP = async (req, res) => {
+const sendOTP = async (req, res, next) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });
@@ -64,23 +64,19 @@ const sendOTP = async (req, res) => {
       await sendOTPEmail(email, otp);
     } catch (emailError) {
       console.error('Send OTP email failed:', emailError.message);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Failed to send verification email. Please try again later.',
-        error: emailError.message 
-      });
+      return next(emailError);
     }
 
     res.status(200).json({ success: true, message: 'OTP sent to your email' });
   } catch (error) {
     console.error('Send OTP Error:', error);
-    res.status(500).json({ message: 'Server error during OTP request', error: error.message });
+    next(error);
   }
 };
 
 // @route   POST /api/auth/verify-otp
 // @access  Public
-const verifyOTP = async (req, res) => {
+const verifyOTP = async (req, res, next) => {
   try {
     const { email, otp } = req.body;
     if (!email || !otp) return res.status(400).json({ message: 'Email and OTP are required' });
@@ -124,13 +120,13 @@ const verifyOTP = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route   POST /api/auth/google
 // @access  Public
-const googleLogin = async (req, res) => {
+const googleLogin = async (req, res, next) => {
   try {
     const { idToken } = req.body;
     if (!idToken) return res.status(400).json({ message: 'ID Token is required' });
@@ -190,13 +186,13 @@ const googleLogin = async (req, res) => {
     });
   } catch (error) {
     console.error('Google Login Error:', error);
-    res.status(500).json({ message: 'Google authentication failed', error: error.message });
+    next(error);
   }
 };
 
 // @route   POST /api/auth/signup
 // @access  Public
-const signup = async (req, res) => {
+const signup = async (req, res, next) => {
   try {
     const { name, email, phone, password, role, referralCode } = req.body;
 
@@ -300,7 +296,7 @@ const signup = async (req, res) => {
 
 // @route   POST /api/auth/login
 // @access  Public
-const login = async (req, res) => {
+const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -368,23 +364,23 @@ const login = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route   GET /api/auth/profile
 // @access  Private
-const getProfile = async (req, res) => {
+const getProfile = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
     res.status(200).json({ success: true, user });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 // @route  GET /api/admin/stats
 // @access Private (admin only)
-const getAdminStats = async (req, res) => {
+const getAdminStats = async (req, res, next) => {
   try {
     const User = require('../models/User');
     const Shop = require('../models/Shop');
@@ -407,12 +403,12 @@ const getAdminStats = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 // @route  PUT /api/auth/profile
 // @access Private
-const updateProfile = async (req, res) => {
+const updateProfile = async (req, res, next) => {
   try {
     const { name, phone, profileImage, expoPushToken, notificationsEnabled } = req.body;
 
@@ -435,26 +431,41 @@ const updateProfile = async (req, res) => {
 
     res.status(200).json({ success: true, user: updatedUser });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route  GET /api/auth/admin/users
 // @access Private (admin only)
-const getAllUsers = async (req, res) => {
+const getAllUsers = async (req, res, next) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const total = await User.countDocuments();
     const users = await User.find()
       .select('-password')
-      .sort({ createdAt: -1 });
-    res.status(200).json({ success: true, count: users.length, users });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    res.status(200).json({ 
+      success: true, 
+      count: users.length, 
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      users 
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch users', error: error.message });
+    next(error);
   }
 };
 
 // @route  DELETE /api/auth/admin/users/:id
 // @access Private (admin only)
-const deleteUser = async (req, res) => {
+const deleteUser = async (req, res, next) => {
   try {
     const userId = req.params.id;
     const Shop = require('../models/Shop');
@@ -494,13 +505,13 @@ const deleteUser = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'User and all associated data deleted successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to delete user', error: error.message });
+    next(error);
   }
 };
 
 // @route  PUT /api/auth/admin/users/:id/suspend
 // @access Private (admin only)
-const toggleUserSuspension = async (req, res) => {
+const toggleUserSuspension = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
@@ -516,13 +527,13 @@ const toggleUserSuspension = async (req, res) => {
       isSuspended: user.isSuspended
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route  GET /api/auth/referrals
 // @access Private
-const getReferralStats = async (req, res) => {
+const getReferralStats = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id).select('referralCode referralCount');
 
@@ -538,12 +549,12 @@ const getReferralStats = async (req, res) => {
       referredUsers
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 // @route   POST /api/auth/refresh-token
 // @access  Public
-const refreshTokenHandler = async (req, res) => {
+const refreshTokenHandler = async (req, res, next) => {
   const { refreshToken } = req.body;
   if (!refreshToken) return res.status(401).json({ message: 'Refresh Token required' });
 

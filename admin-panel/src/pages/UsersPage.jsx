@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { getAllUsersAPI, deleteUserAPI, toggleUserSuspensionAPI } from '../services/api';
+import toast from 'react-hot-toast';
 
 export default function UsersPage() {
   const [users, setUsers]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [search, setSearch]   = useState('');
+  const [page, setPage]       = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [actionLoading, setActionLoading] = useState(null);
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { fetchUsers(); }, [page]);
 
   const fetchUsers = async () => {
     setError('');
+    setLoading(true);
     try {
-      const res = await getAllUsersAPI();
+      const res = await getAllUsersAPI(page, 10);
       setUsers(res.data.users);
+      setTotalPages(res.data.totalPages || 1);
     } catch (err) {
       setError(err.message || 'Failed to load users. Please refresh.');
     } finally {
@@ -23,28 +29,34 @@ export default function UsersPage() {
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this user? This cannot be undone!')) return;
+    setActionLoading(id);
     try {
       await deleteUserAPI(id);
       fetchUsers();
     } catch (err) {
-      alert(err.message || 'Failed to delete user');
+      toast.error(err.message || 'Failed to delete user');
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleToggleSuspension = async (id, currentStatus) => {
     const action = currentStatus ? 'unsuspend' : 'suspend';
     if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
+    setActionLoading(id);
     try {
       await toggleUserSuspensionAPI(id);
       fetchUsers();
     } catch (err) {
-      alert(err.message || `Failed to ${action} user`);
+      toast.error(err.message || `Failed to ${action} user`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const filteredUsers = users.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
+    (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (u.email || '').toLowerCase().includes(search.toLowerCase())
   );
 
   if (loading) return <div style={styles.loading}>Loading users...</div>;
@@ -84,7 +96,7 @@ export default function UsersPage() {
               <tr key={user._id} style={styles.tableRow}>
                 <td style={styles.td}>
                   <div style={styles.userCell}>
-                    <div style={styles.avatar}>{user.name[0].toUpperCase()}</div>
+                    <div style={styles.avatar}>{(user.name?.[0] || '?').toUpperCase()}</div>
                     <strong>{user.name}</strong>
                   </div>
                 </td>
@@ -109,17 +121,20 @@ export default function UsersPage() {
                         style={{
                           ...styles.suspendBtn,
                           backgroundColor: user.isSuspended ? '#E8F5E9' : '#FFF3E0',
-                          color: user.isSuspended ? '#2E7D32' : '#E65100'
+                          color: user.isSuspended ? '#2E7D32' : '#E65100',
+                          opacity: actionLoading === user._id ? 0.5 : 1
                         }}
                         onClick={() => handleToggleSuspension(user._id, user.isSuspended)}
+                        disabled={actionLoading === user._id}
                       >
-                        {user.isSuspended ? '✅ Unsuspend' : '🚫 Suspend'}
+                        {actionLoading === user._id ? '...' : (user.isSuspended ? '✅ Unsuspend' : '🚫 Suspend')}
                       </button>
                       <button
-                        style={styles.deleteBtn}
+                        style={{ ...styles.deleteBtn, opacity: actionLoading === user._id ? 0.5 : 1 }}
                         onClick={() => handleDelete(user._id)}
+                        disabled={actionLoading === user._id}
                       >
-                        🗑️ Delete
+                        {actionLoading === user._id ? '...' : '🗑️ Delete'}
                       </button>
                     </div>
                   )}
@@ -129,6 +144,26 @@ export default function UsersPage() {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div style={styles.paginationContainer}>
+          <button 
+            style={styles.pageBtn} 
+            disabled={page === 1} 
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+          >
+            Prev
+          </button>
+          <span style={styles.pageText}>Page {page} of {totalPages}</span>
+          <button 
+            style={styles.pageBtn} 
+            disabled={page === totalPages} 
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -182,5 +217,15 @@ const styles = {
     padding: '6px 14px', backgroundColor: '#FFEBEE',
     color: '#C62828', border: 'none', borderRadius: '8px',
     cursor: 'pointer', fontWeight: '600', fontSize: '13px'
-  }
+  },
+  paginationContainer: {
+    display: 'flex', justifyContent: 'center', alignItems: 'center',
+    gap: '16px', marginTop: '24px'
+  },
+  pageBtn: {
+    padding: '8px 16px', backgroundColor: '#6C63FF', color: '#fff',
+    border: 'none', borderRadius: '8px', cursor: 'pointer',
+    fontWeight: '600', fontSize: '14px', disabled: { opacity: 0.5 }
+  },
+  pageText: { fontSize: '14px', fontWeight: '600', color: '#333' }
 };

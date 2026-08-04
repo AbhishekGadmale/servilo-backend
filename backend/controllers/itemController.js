@@ -9,7 +9,7 @@ const getItemKey = (category) => {
 
 // @route  GET /api/shops/:id/items
 // @access Public
-const getItems = async (req, res) => {
+const getItems = async (req, res, next) => {
   try {
     const cacheKey = `shop:items:${req.params.id}`;
     const cachedItems = await getCache(cacheKey);
@@ -33,13 +33,13 @@ const getItems = async (req, res) => {
 
     res.status(200).json(responseData);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route  POST /api/shops/:id/items
 // @access Private (provider)
-const addItem = async (req, res) => {
+const addItem = async (req, res, next) => {
   try {
     const shop = await Shop.findById(req.params.id);
     if (!shop) return res.status(404).json({ message: 'Shop not found' });
@@ -67,13 +67,13 @@ const addItem = async (req, res) => {
       item: addedItem
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route  PUT /api/shops/:id/items/:itemId
 // @access Private (provider)
-const updateItem = async (req, res) => {
+const updateItem = async (req, res, next) => {
   try {
     const shop = await Shop.findById(req.params.id);
     if (!shop) return res.status(404).json({ message: 'Shop not found' });
@@ -112,13 +112,13 @@ const updateItem = async (req, res) => {
       item: shop[itemKey][itemIndex]
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route  DELETE /api/shops/:id/items/:itemId
 // @access Private (provider)
-const deleteItem = async (req, res) => {
+const deleteItem = async (req, res, next) => {
   try {
     const shop = await Shop.findById(req.params.id);
     if (!shop) return res.status(404).json({ message: 'Shop not found' });
@@ -140,7 +140,7 @@ const deleteItem = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Item deleted!' });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 

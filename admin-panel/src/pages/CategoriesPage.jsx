@@ -1,5 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { getCategoriesAPI, createCategoryAPI, updateCategoryAPI, deleteCategoryAPI } from '../services/api';
+import toast from 'react-hot-toast';
+import { FaScissors, FaUtensils, FaBroom, FaWrench, FaFolder, FaCar, FaLaptop } from 'react-icons/fa';
+
+const IconMap = {
+  scissors: <FaScissors />,
+  utensils: <FaUtensils />,
+  cleaning: <FaBroom />,
+  broom: <FaBroom />,
+  repair: <FaWrench />,
+  wrench: <FaWrench />,
+  car: <FaCar />,
+  laptop: <FaLaptop />,
+  tech: <FaLaptop />
+};
+
+const getIcon = (iconName) => {
+  if (!iconName) return <FaFolder />;
+  const normalized = iconName.toLowerCase().trim();
+  return IconMap[normalized] || <span style={{ fontSize: '24px' }}>{iconName}</span>;
+};
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState([]);
@@ -17,7 +37,7 @@ export default function CategoriesPage() {
       const res = await getCategoriesAPI();
       setCategories(res.data.categories);
     } catch (err) {
-      alert('Failed to fetch categories');
+      toast.error('Failed to fetch categories');
     } finally {
       setLoading(false);
     }
@@ -36,7 +56,7 @@ export default function CategoriesPage() {
       setCurrentCategory(null);
       fetchCategories();
     } catch (err) {
-      alert(err.response?.data?.message || 'Action failed');
+      toast.error(err.response?.data?.message || 'Action failed');
     }
   };
 
@@ -46,7 +66,7 @@ export default function CategoriesPage() {
         await deleteCategoryAPI(id);
         fetchCategories();
       } catch (err) {
-        alert('Delete failed');
+        toast.error('Delete failed');
       }
     }
   };
@@ -72,7 +92,7 @@ export default function CategoriesPage() {
         {categories.map(cat => (
           <div key={cat._id} style={styles.card}>
             <div style={styles.iconBox}>
-              <span style={{ fontSize: '24px' }}>{cat.icon || '📁'}</span>
+              <span style={{ fontSize: '24px' }}>{getIcon(cat.icon)}</span>
             </div>
             <div style={styles.cardContent}>
               <h3 style={styles.catName}>{cat.name}</h3>

@@ -2,7 +2,7 @@ const Shop = require('../models/Shop');
 
 // @route  POST /api/shops/create
 // @access Private (provider only)
-const createShop = async (req, res) => {
+const createShop = async (req, res, next) => {
   try {
     const {
       shopName, category, description,
@@ -48,7 +48,7 @@ const createShop = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
@@ -82,7 +82,7 @@ const { getCache, setCache, clearCache } = require('../utils/cacheHelper');
 
 // @route  GET /api/shops
 // @access Public
-const getAllShops = async (req, res) => {
+const getAllShops = async (req, res, next) => {
   try {
     const { category, lat, lng, radius, search } = req.query;
     const page = parseInt(req.query.page) || 1;
@@ -92,9 +92,12 @@ const getAllShops = async (req, res) => {
     let query = { isApproved: true };
     if (category) query.category = category;
     
-    // Use text search if available, otherwise fallback to regex
+    // Use regex search to avoid conflicts with $near geospatial queries
     if (search) {
-      query.$text = { $search: search };
+      query.$or = [
+        { shopName: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
     }
 
     // --- Redis Caching Logic ---
@@ -200,13 +203,13 @@ const getAllShops = async (req, res) => {
     res.status(200).json(responseData);
 
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route  GET /api/shops/:id
 // @access Public
-const getShopById = async (req, res) => {
+const getShopById = async (req, res, next) => {
   try {
     const cacheKey = `shop:details:${req.params.id}`;
     const cachedShop = await getCache(cacheKey);
@@ -229,13 +232,13 @@ const getShopById = async (req, res) => {
     res.status(200).json({ success: true, shop });
 
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route  PUT /api/shops/:id
 // @access Private (owner only)
-const updateShop = async (req, res) => {
+const updateShop = async (req, res, next) => {
   try {
     const shop = await Shop.findById(req.params.id);
 
@@ -287,13 +290,13 @@ const updateShop = async (req, res) => {
     res.status(200).json({ success: true, shop: updatedShop });
 
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route  PUT /api/shops/:id/toggle-status
 // @access Private (owner only)
-const toggleShopStatus = async (req, res) => {
+const toggleShopStatus = async (req, res, next) => {
   try {
     const shop = await Shop.findById(req.params.id);
 
@@ -319,13 +322,13 @@ const toggleShopStatus = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route  GET /api/shops/my-shop
 // @access Private (provider only)
-const getMyShop = async (req, res) => {
+const getMyShop = async (req, res, next) => {
   try {
     const shop = await Shop.findOne({ ownerId: req.user.id });
 
@@ -336,19 +339,38 @@ const getMyShop = async (req, res) => {
     res.status(200).json({ success: true, shop });
 
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 // @route  GET /api/shops/admin/all
 // @access Private (admin only)
-const getAllShopsAdmin = async (req, res) => {
+const getAllShopsAdmin = async (req, res, next) => {
   try {
-    const shops = await Shop.find()
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const query = {};
+    if (req.query.status === 'pending') query.isApproved = false;
+    else if (req.query.status === 'approved') query.isApproved = true;
+
+    const total = await Shop.countDocuments(query);
+    const shops = await Shop.find(query)
       .populate('ownerId', 'name email phone')
-      .sort({ createdAt: -1 });
-    res.status(200).json({ success: true, count: shops.length, shops });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+      
+    res.status(200).json({ 
+      success: true, 
+      count: shops.length,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      shops 
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
@@ -356,7 +378,7 @@ const { notifyProvider } = require('../utils/notifications');
 
 // @route  PUT /api/shops/:id/approve
 // @access Private (admin only)
-const approveShop = async (req, res) => {
+const approveShop = async (req, res, next) => {
   try {
     const shop = await Shop.findById(req.params.id);
     if (!shop) {
@@ -380,13 +402,13 @@ const approveShop = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Shop approved successfully', shop });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route  DELETE /api/shops/:id
 // @access Private (admin only)
-const deleteShop = async (req, res) => {
+const deleteShop = async (req, res, next) => {
   try {
     const shop = await Shop.findById(req.params.id);
     if (!shop) {
@@ -400,7 +422,7 @@ const deleteShop = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Shop removed' });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 module.exports = {

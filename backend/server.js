@@ -43,18 +43,20 @@ const ALLOWED_ORIGINS = [
   // Local development
   'http://localhost:3000',
   'http://localhost:5000',
-  'http://localhost:5173',
-  'http://192.168.31.135:5000'   // your local IP for mobile testing
+  'http://localhost:5173'
 ];
 
 const io = require('socket.io')(server, {
   cors: {
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, Postman, curl)
+      // Allow requests with no origin (mobile app, postman, etc)
       if (!origin) return callback(null, true);
-      if (ALLOWED_ORIGINS.includes(origin)) {
+      
+      const isLocalNetwork = /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:\d+$/.test(origin);
+      if (ALLOWED_ORIGINS.includes(origin) || process.env.FRONTEND_URL === origin || isLocalNetwork) {
         callback(null, true);
       } else {
+        console.warn(`⚠️  Socket CORS blocked request from: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -121,7 +123,7 @@ io.on('connection', (socket) => {
     socket.to(bookingId).emit('messages_read', { userId });
   });
 
-  socket.on('send_message', async (data) => {
+  socket.on('send_message', async (data, callback) => {
     const { bookingId, shopId, senderId, receiverId, message, image, audio } = data;
 
     try {
@@ -149,6 +151,7 @@ io.on('connection', (socket) => {
       // Always emit to the room name provided by the client (ObjectId or inquiry string)
       io.to(bookingId).emit('receive_message', populatedMessage);
       console.log(`📩 Message sent in room ${bookingId}`);
+      if (typeof callback === 'function') callback({ success: true, message: populatedMessage });
 
       // --- PUSH NOTIFICATION LOGIC ---
       // If the receiver is not in the room, send a push notification
@@ -185,6 +188,7 @@ io.on('connection', (socket) => {
       }
     } catch (error) {
       console.error('❌ Socket message error:', error.message);
+      if (typeof callback === 'function') callback({ success: false, error: error.message });
     }
   });
 
@@ -233,7 +237,8 @@ const corsOptions = {
     // Allow requests with no origin (mobile apps, Postman, curl)
     if (!origin) return callback(null, true);
 
-    if (ALLOWED_ORIGINS.includes(origin)) {
+    const isLocalNetwork = /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:\d+$/.test(origin);
+    if (ALLOWED_ORIGINS.includes(origin) || process.env.FRONTEND_URL === origin || isLocalNetwork) {
       callback(null, true);
     } else {
       console.warn(`⚠️  CORS blocked request from: ${origin}`);

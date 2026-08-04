@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getAllReviewsAdminAPI, deleteReviewAPI } from '../services/api';
+import toast from 'react-hot-toast';
 
 export default function ReviewsPage() {
   const [reviews, setReviews] = useState([]);
@@ -27,14 +28,14 @@ export default function ReviewsPage() {
       await deleteReviewAPI(id);
       fetchReviews();
     } catch (err) {
-      alert(err.message || 'Failed to delete review');
+      toast.error(err.message || 'Failed to delete review');
     }
   };
 
   const filteredReviews = reviews.filter(r =>
-    r.comment?.toLowerCase().includes(search.toLowerCase()) ||
-    r.userId?.name.toLowerCase().includes(search.toLowerCase()) ||
-    r.shopId?.shopName.toLowerCase().includes(search.toLowerCase())
+    (r.comment || '').toLowerCase().includes(search.toLowerCase()) ||
+    (r.userId?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (r.shopId?.shopName || '').toLowerCase().includes(search.toLowerCase())
   );
 
   if (loading) return <div style={styles.loading}>Loading reviews...</div>;

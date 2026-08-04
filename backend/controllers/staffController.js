@@ -5,7 +5,7 @@ const { getCache, setCache, clearCache } = require('../utils/cacheHelper');
 
 // @route   GET /api/staff/:shopId
 // @access  Public
-const getShopStaff = async (req, res) => {
+const getShopStaff = async (req, res, next) => {
   try {
     const cacheKey = `shop:staff:${req.params.shopId}`;
     const cachedStaff = await getCache(cacheKey);
@@ -19,13 +19,13 @@ const getShopStaff = async (req, res) => {
     
     res.status(200).json({ success: true, count: staff.length, staff });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route   POST /api/staff
 // @access  Private (Provider only)
-const addStaff = async (req, res) => {
+const addStaff = async (req, res, next) => {
   try {
     const { name, specialization, photo } = req.body;
     
@@ -46,13 +46,13 @@ const addStaff = async (req, res) => {
 
     res.status(201).json({ success: true, member });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route   PUT /api/staff/:id
 // @access  Private (Provider only)
-const updateStaff = async (req, res) => {
+const updateStaff = async (req, res, next) => {
   try {
     const { name, specialization, photo, isAvailable } = req.body;
     
@@ -75,13 +75,13 @@ const updateStaff = async (req, res) => {
 
     res.status(200).json({ success: true, member: updatedMember });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route   DELETE /api/staff/:id
 // @access  Private (Provider only)
-const deleteStaff = async (req, res) => {
+const deleteStaff = async (req, res, next) => {
   try {
     const member = await Staff.findById(req.params.id);
     if (!member) return res.status(404).json({ message: 'Staff member not found' });
@@ -95,7 +95,7 @@ const deleteStaff = async (req, res) => {
     await clearCache(`shop:staff:${shop._id}`);
     res.status(200).json({ success: true, message: 'Staff member removed' });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 

@@ -3,6 +3,7 @@ const Shop = require('../models/Shop');
 const User = require('../models/User');
 const Staff = require('../models/Staff');
 const { notifyUser, notifyProvider, sendPushNotification } = require('../utils/notifications');
+const mongoose = require('mongoose');
 
 // ─── Notify Queue Positions ──────────────────────────────
 const notifyQueuePositions = async (shopId, staffId = null) => {
@@ -37,7 +38,7 @@ const notifyQueuePositions = async (shopId, staffId = null) => {
 };
 
 // ─── Create Booking ──────────────────────────────────────
-const createBooking = async (req, res) => {
+const createBooking = async (req, res, next) => {
   try {
     const { shopId, staffId, serviceType, bookingType, isForFriend,
       friendName, friendPhone, barberData, orderData,
@@ -107,46 +108,64 @@ const createBooking = async (req, res) => {
     // ── Staff & Queue Logic ──────────────────────────────
     let finalBarberData = barberData || { duration: shop.averageServiceTime || 30 };
     let assignedStaffId = staffId;
+    let booking;
+    
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    if (serviceType === 'barber') {
-      if (assignedStaffId) {
-        // Queue for specific staff - with ownership check
-        const staff = await Staff.findOneAndUpdate(
-          { _id: assignedStaffId, shopId: shopId },
-          { $inc: { currentQueue: 1 } },
-          { new: true }
-        );
-        if (!staff) return res.status(404).json({ message: 'Staff member not found or does not belong to this shop' });
-        
-        finalBarberData.queueNumber = staff.currentQueue;
-        finalBarberData.estimatedWaitTime = staff.currentQueue * (finalBarberData.duration || shop.averageServiceTime || 30);
-      } else {
-        // General Shop Queue
-        const updatedShop = await Shop.findByIdAndUpdate(
-          shopId,
-          { $inc: { currentQueue: 1 } },
-          { new: true }
-        );
-        finalBarberData.queueNumber = updatedShop.currentQueue;
-        finalBarberData.estimatedWaitTime = updatedShop.currentQueue * (finalBarberData.duration || shop.averageServiceTime || 30);
+    try {
+      if (serviceType === 'barber') {
+        if (assignedStaffId) {
+          // Queue for specific staff - with ownership check
+          const staff = await Staff.findOneAndUpdate(
+            { _id: assignedStaffId, shopId: shopId },
+            { $inc: { currentQueue: 1 } },
+            { new: true, session }
+          );
+          if (!staff) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ message: 'Staff member not found or does not belong to this shop' });
+          }
+          
+          finalBarberData.queueNumber = staff.currentQueue;
+          finalBarberData.estimatedWaitTime = staff.currentQueue * (finalBarberData.duration || shop.averageServiceTime || 30);
+        } else {
+          // General Shop Queue
+          const updatedShop = await Shop.findByIdAndUpdate(
+            shopId,
+            { $inc: { currentQueue: 1 } },
+            { new: true, session }
+          );
+          finalBarberData.queueNumber = updatedShop.currentQueue;
+          finalBarberData.estimatedWaitTime = updatedShop.currentQueue * (finalBarberData.duration || shop.averageServiceTime || 30);
+        }
       }
-    }
 
-    const booking = await Booking.create({
-      userId: req.user.id,
-      shopId,
-      staffId: assignedStaffId,
-      serviceType,
-      bookingType,
-      isForFriend: isForFriend || false,
-      friendName: friendName || '',
-      friendPhone: friendPhone || '',
-      barberData: finalBarberData,
-      orderData: orderData || { items: [], totalAmount: 0 },
-      electricianData: electricianData || {},
-      plumberData: plumberData || {},
-      mechanicData: mechanicData || {}
-    });
+      const bookingList = await Booking.create([{
+        userId: req.user.id,
+        shopId,
+        staffId: assignedStaffId,
+        serviceType,
+        bookingType,
+        isForFriend: isForFriend || false,
+        friendName: friendName || '',
+        friendPhone: friendPhone || '',
+        barberData: finalBarberData,
+        orderData: orderData || { items: [], totalAmount: 0 },
+        electricianData: electricianData || {},
+        plumberData: plumberData || {},
+        mechanicData: mechanicData || {}
+      }], { session });
+      
+      booking = bookingList[0];
+      await session.commitTransaction();
+      session.endSession();
+    } catch (txnError) {
+      await session.abortTransaction();
+      session.endSession();
+      throw txnError;
+    }
 
     await booking.populate('shopId', 'shopName address phone category ownerId');
     await booking.populate('userId', 'name phone');
@@ -179,12 +198,12 @@ const createBooking = async (req, res) => {
 
     res.status(201).json({ success: true, message: 'Booking created!', booking });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // ─── Get My Bookings ─────────────────────────────────────
-const getMyBookings = async (req, res) => {
+const getMyBookings = async (req, res, next) => {
   try {
     const { cursor, limit = 10 } = req.query;
     let query = { userId: req.user.id };
@@ -204,12 +223,12 @@ const getMyBookings = async (req, res) => {
 
     res.status(200).json({ success: true, count: bookings.length, bookings, hasMore, nextCursor });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // ─── Get Shop Bookings ───────────────────────────────────
-const getShopBookings = async (req, res) => {
+const getShopBookings = async (req, res, next) => {
   try {
     const shop = await Shop.findOne({ ownerId: req.user.id });
     if (!shop) return res.status(404).json({ message: 'Shop not found' });
@@ -232,12 +251,12 @@ const getShopBookings = async (req, res) => {
 
     res.status(200).json({ success: true, count: bookings.length, bookings, hasMore, nextCursor });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // ─── Update Booking Status ───────────────────────────────
-const updateBookingStatus = async (req, res) => {
+const updateBookingStatus = async (req, res, next) => {
   try {
     const { status, providerNote, visitCharge, estimatedCost } = req.body;
     const booking = await Booking.findById(req.params.id)
@@ -298,18 +317,16 @@ const updateBookingStatus = async (req, res) => {
     const terminalStates = ['completed', 'rejected', 'cancelled'];
     if (booking.serviceType === 'barber' && terminalStates.includes(status) && !terminalStates.includes(previousStatus)) {
       // Atomic decrement shop queue
-      await Shop.findByIdAndUpdate(
-        booking.shopId,
-        { $inc: { currentQueue: -1 } },
-        { condition: { currentQueue: { $gt: 0 } } }
+      await Shop.findOneAndUpdate(
+        { _id: booking.shopId, currentQueue: { $gt: 0 } },
+        { $inc: { currentQueue: -1 } }
       );
 
       // Atomic decrement staff queue if assigned
       if (booking.staffId) {
-        await Staff.findByIdAndUpdate(
-          booking.staffId,
-          { $inc: { currentQueue: -1 } },
-          { condition: { currentQueue: { $gt: 0 } } }
+        await Staff.findOneAndUpdate(
+          { _id: booking.staffId, currentQueue: { $gt: 0 } },
+          { $inc: { currentQueue: -1 } }
         );
       }
       
@@ -337,12 +354,12 @@ const updateBookingStatus = async (req, res) => {
 
     res.status(200).json({ success: true, booking });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // ─── Cancel Booking ──────────────────────────────────────
-const cancelBooking = async (req, res) => {
+const cancelBooking = async (req, res, next) => {
   try {
     const booking = await Booking.findById(req.params.id);
     if (!booking) return res.status(404).json({ message: 'Booking not found' });
@@ -372,16 +389,14 @@ const cancelBooking = async (req, res) => {
 
     // Queue notifications for barber
     if (booking.serviceType === 'barber') {
-      await Shop.findByIdAndUpdate(
-        booking.shopId,
-        { $inc: { currentQueue: -1 } },
-        { condition: { currentQueue: { $gt: 0 } } }
+      await Shop.findOneAndUpdate(
+        { _id: booking.shopId, currentQueue: { $gt: 0 } },
+        { $inc: { currentQueue: -1 } }
       );
       if (booking.staffId) {
-        await Staff.findByIdAndUpdate(
-          booking.staffId,
-          { $inc: { currentQueue: -1 } },
-          { condition: { currentQueue: { $gt: 0 } } }
+        await Staff.findOneAndUpdate(
+          { _id: booking.staffId, currentQueue: { $gt: 0 } },
+          { $inc: { currentQueue: -1 } }
         );
       }
       await notifyQueuePositions(booking.shopId, booking.staffId);
@@ -407,12 +422,12 @@ const cancelBooking = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Booking cancelled' });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // ─── Mark Customer Arrived (Barber) ─────────────────────
-const markArrived = async (req, res) => {
+const markArrived = async (req, res, next) => {
   try {
     const booking = await Booking.findById(req.params.id);
     if (!booking) return res.status(404).json({ message: 'Booking not found' });
@@ -434,12 +449,12 @@ const markArrived = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Marked as arriving!' });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // ─── Get Booking Progress (Real-time UX) ────────────────
-const getBookingProgress = async (req, res) => {
+const getBookingProgress = async (req, res, next) => {
   try {
     const booking = await Booking.findById(req.params.id)
       .populate('shopId', 'shopName location currentQueue');
@@ -477,12 +492,12 @@ const getBookingProgress = async (req, res) => {
 
     res.status(200).json({ success: true, progress: progressData });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // ─── Next Customer (One-click Efficiency) ────────────────
-const nextCustomer = async (req, res) => {
+const nextCustomer = async (req, res, next) => {
   try {
     const { staffId } = req.body; // Optional: advancement for specific staff
     const shop = await Shop.findOne({ ownerId: req.user.id });
@@ -508,18 +523,16 @@ const nextCustomer = async (req, res) => {
     await currentBooking.save();
 
     // 3. Update shop queue count
-    await Shop.findByIdAndUpdate(
-      shop._id,
-      { $inc: { currentQueue: -1 } },
-      { condition: { currentQueue: { $gt: 0 } } }
+    await Shop.findOneAndUpdate(
+      { _id: shop._id, currentQueue: { $gt: 0 } },
+      { $inc: { currentQueue: -1 } }
     );
 
     // Decrement staff queue if assigned
     if (currentBooking.staffId) {
-      await Staff.findByIdAndUpdate(
-        currentBooking.staffId,
-        { $inc: { currentQueue: -1 } },
-        { condition: { currentQueue: { $gt: 0 } } }
+      await Staff.findOneAndUpdate(
+        { _id: currentBooking.staffId, currentQueue: { $gt: 0 } },
+        { $inc: { currentQueue: -1 } }
       );
     }
 
@@ -558,12 +571,12 @@ const nextCustomer = async (req, res) => {
       nextBooking: nextInLine ? nextInLine._id : null
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // ─── Get Provider Stats (Analytics) ──────────────────────
-const getProviderStats = async (req, res) => {
+const getProviderStats = async (req, res, next) => {
   try {
     const shop = await Shop.findOne({ ownerId: req.user.id });
     if (!shop) return res.status(404).json({ message: 'Shop not found' });
@@ -649,7 +662,7 @@ const getProviderStats = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 

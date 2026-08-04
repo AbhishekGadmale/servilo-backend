@@ -50,13 +50,13 @@ export const verifyOTPAPI = (email, otp) => api.post('/auth/verify-otp', { email
 
 // ── Admin: Stats & Users ──────────────────────────────────
 export const getStatsAPI    = () => api.get('/auth/admin/stats');
-export const getAllUsersAPI  = () => api.get('/auth/admin/users');
+export const getAllUsersAPI  = (page = 1, limit = 10) => api.get(`/auth/admin/users?page=${page}&limit=${limit}`);
 export const deleteUserAPI  = (id) => api.delete(`/auth/admin/users/${id}`);
 export const toggleUserSuspensionAPI = (id) => api.put(`/auth/admin/users/${id}/suspend`);
 
 
 // ── Admin: Shops ──────────────────────────────────────────
-export const getAllShopsAdminAPI = () => api.get('/shops/admin/all');
+export const getAllShopsAdminAPI = (page = 1, limit = 10, status = 'pending') => api.get(`/shops/admin/all?page=${page}&limit=${limit}&status=${status}`);
 export const approveShopAPI     = (id) => api.put(`/shops/${id}/approve`);
 export const deleteShopAPI      = (id) => api.delete(`/shops/${id}`);
 

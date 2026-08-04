@@ -21,7 +21,7 @@ const bookingSchema = new mongoose.Schema({
 
   bookingType: {
     type: String,
-    enum: ['queue', 'order', 'service_request'],
+    enum: ['queue', 'order', 'request', 'service_request', 'food_order', 'slot'],
     required: true
   },
 

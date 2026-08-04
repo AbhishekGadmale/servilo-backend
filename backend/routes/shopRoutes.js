@@ -22,11 +22,15 @@ const handleValidation = (req, res, next) => {
   next();
 };
 
-// Public
+// Public static routes
 router.get('/', getAllShops);
-router.get('/:id', getShopById);
 
-// Provider
+// Admin static routes
+router.get('/admin/all', protect, authorizeRoles('admin'), getAllShopsAdmin);
+
+// Provider static routes
+router.get('/provider/my-shop', protect, authorizeRoles('provider', 'admin'), getMyShop);
+
 router.post('/create',
   protect,
   authorizeRoles('provider', 'admin'),
@@ -40,7 +44,8 @@ router.post('/create',
   createShop
 );
 
-router.get('/provider/my-shop', protect, authorizeRoles('provider', 'admin'), getMyShop);
+// Dynamic routes
+router.get('/:id', getShopById);
 
 router.put('/:id',
   protect,
@@ -61,8 +66,7 @@ router.post('/:id/items', protect, authorizeRoles('provider', 'admin'), itemCont
 router.put('/:id/items/:itemId', protect, authorizeRoles('provider', 'admin'), itemController.updateItem);
 router.delete('/:id/items/:itemId', protect, authorizeRoles('provider', 'admin'), itemController.deleteItem);
 
-// Admin
-router.get('/admin/all', protect, authorizeRoles('admin'), getAllShopsAdmin);
+// Admin dynamic routes
 router.put('/:id/approve', protect, authorizeRoles('admin'), approveShop);
 router.delete('/:id', protect, authorizeRoles('admin'), deleteShop);
 

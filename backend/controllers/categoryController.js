@@ -4,7 +4,7 @@ const { getCache, setCache, clearCache } = require('../utils/cacheHelper');
 
 // @route   GET /api/categories
 // @access  Public
-const getCategories = async (req, res) => {
+const getCategories = async (req, res, next) => {
   try {
     const cacheKey = 'categories:all:active';
     const cachedData = await getCache(cacheKey);
@@ -21,13 +21,13 @@ const getCategories = async (req, res) => {
     res.status(200).json({ success: true, count: categories.length, categories });
   } catch (error) {
     console.error('Error in getCategories:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route   POST /api/categories
 // @access  Private (Admin only)
-const createCategory = async (req, res) => {
+const createCategory = async (req, res, next) => {
   try {
     const { name, icon, description } = req.body;
     console.log('Step 1: Received request to create category:', { name, icon });
@@ -57,13 +57,13 @@ const createCategory = async (req, res) => {
     res.status(201).json({ success: true, category });
   } catch (error) {
     console.error('CRITICAL Error in createCategory:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route   PUT /api/categories/:id
 // @access  Private (Admin only)
-const updateCategory = async (req, res) => {
+const updateCategory = async (req, res, next) => {
   try {
     const { name, icon, description, isActive } = req.body;
     const updateData = { icon, description, isActive };
@@ -98,13 +98,13 @@ const updateCategory = async (req, res) => {
     res.status(200).json({ success: true, category });
   } catch (error) {
     console.error('Error in updateCategory:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route   DELETE /api/categories/:id
 // @access  Private (Admin only)
-const deleteCategory = async (req, res) => {
+const deleteCategory = async (req, res, next) => {
   try {
     const category = await Category.findById(req.params.id);
     if (!category) {
@@ -119,7 +119,7 @@ const deleteCategory = async (req, res) => {
     res.status(200).json({ success: true, message: 'Category removed' });
   } catch (error) {
     console.error('Error in deleteCategory:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 

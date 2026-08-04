@@ -6,7 +6,7 @@ const mongoose = require('mongoose');
 
 // @route  POST /api/reviews
 // @access Private (customer)
-const addReview = async (req, res) => {
+const addReview = async (req, res, next) => {
   try {
     const { shopId, rating, comment } = req.body;
 
@@ -76,13 +76,13 @@ const addReview = async (req, res) => {
     res.status(201).json({ success: true, message: 'Review added!', review });
 
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route  GET /api/reviews/:shopId
 // @access Public
-const getShopReviews = async (req, res) => {
+const getShopReviews = async (req, res, next) => {
   try {
     const { cursor, limit = 10 } = req.query;
     const cacheKey = `shop:reviews:${req.params.shopId}:cursor=${cursor || 'start'}:limit=${limit}`;
@@ -113,13 +113,13 @@ const getShopReviews = async (req, res) => {
     res.status(200).json(response);
 
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route  DELETE /api/reviews/:id
 // @access Private (admin)
-const deleteReview = async (req, res) => {
+const deleteReview = async (req, res, next) => {
   try {
     const review = await Review.findById(req.params.id);
     if (!review) return res.status(404).json({ message: 'Review not found' });
@@ -137,7 +137,7 @@ const deleteReview = async (req, res) => {
 
     res.status(200).json({ success: true, message: 'Review deleted' });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
@@ -166,7 +166,7 @@ const recalculateShopRating = async (shopId) => {
 
 // @route  GET /api/reviews/admin/all
 // @access Private (admin)
-const getAllReviewsAdmin = async (req, res) => {
+const getAllReviewsAdmin = async (req, res, next) => {
   try {
     const reviews = await Review.find()
       .populate('userId', 'name email')
@@ -175,7 +175,7 @@ const getAllReviewsAdmin = async (req, res) => {
 
     res.status(200).json({ success: true, count: reviews.length, reviews });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 

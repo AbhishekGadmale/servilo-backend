@@ -6,6 +6,7 @@ import UsersPage from './pages/UsersPage';
 import CategoriesPage from './pages/CategoriesPage';
 import ReviewsPage from './pages/ReviewsPage';
 import Sidebar from './components/Sidebar';
+import { Toaster } from 'react-hot-toast';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -38,6 +39,7 @@ export default function App() {
 
   return (
     <div style={styles.app}>
+      <Toaster position="top-right" />
       <Sidebar
         activePage={activePage}
         setActivePage={setActivePage}

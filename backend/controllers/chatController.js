@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 
 // @route   GET /api/chat/:id
 // @access  Private
-const getChatHistory = async (req, res) => {
+const getChatHistory = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { type, cursor, limit = 20 } = req.query;
@@ -64,13 +64,13 @@ const getChatHistory = async (req, res) => {
       nextCursor
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route   POST /api/chat/image
 // @access  Private
-const uploadChatImage = async (req, res) => {
+const uploadChatImage = async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No image uploaded' });
@@ -80,13 +80,13 @@ const uploadChatImage = async (req, res) => {
       imageUrl: req.file.path
     });
   } catch (error) {
-    res.status(500).json({ message: 'Upload failed', error: error.message });
+    next(error);
   }
 };
 
 // @route   POST /api/chat/audio
 // @access  Private
-const uploadChatAudio = async (req, res) => {
+const uploadChatAudio = async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No audio file uploaded' });
@@ -96,13 +96,13 @@ const uploadChatAudio = async (req, res) => {
       audioUrl: req.file.path
     });
   } catch (error) {
-    res.status(500).json({ message: 'Audio upload failed', error: error.message });
+    next(error);
   }
 };
 
 // @route   PUT /api/chat/:bookingId/read
 // @access  Private
-const markMessagesAsRead = async (req, res) => {
+const markMessagesAsRead = async (req, res, next) => {
   try {
     const { bookingId } = req.params;
     // bookingId can be an ObjectId or an inquiry string
@@ -112,13 +112,13 @@ const markMessagesAsRead = async (req, res) => {
     );
     res.status(200).json({ success: true, message: 'Messages marked as read' });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
 // @route   GET /api/chat/list
 // @access  Private
-const getChatList = async (req, res) => {
+const getChatList = async (req, res, next) => {
   try {
     const userId = new mongoose.Types.ObjectId(req.user.id);
     const isProvider = req.user.role === 'provider';
@@ -203,7 +203,7 @@ const getChatList = async (req, res) => {
 
     res.status(200).json({ success: true, chats });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    next(error);
   }
 };
 
